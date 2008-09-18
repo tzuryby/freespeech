@@ -6,7 +6,7 @@
     **************************************
 
 Message Structure:
-    A.B.C.D.LEN.LEN.BDY.BDY---.BDY.BDY.D.C.B.A        
+    A.B.C.D.TYPE.LEN.LEN.BDY.BDY---.BDY.BDY.D.C.B.A        
 
 class Parser()
     Provides parsing message utilities
@@ -20,7 +20,7 @@ class Packer()
     Receives messages or parts of messages and pack them and put them in 
     the provided queue when they are ready, i.e. message  valid and complete.
     __init__(self, queue)
-        expect an instanse of Queue.Queue()
+        expect an instanse of Queue.Queue() or any other object that has 'put' method
 '''
 
 __author__ = 'Tzury Bar Yochay'
@@ -31,25 +31,38 @@ __all__ = ['Parser', 'Packer']
 
 import struct
 import Queue
-from utils import Storage
+from messagetypes import *
+
+
+__all__ = ['MessageFactory', 'Parser', 'Packer']
+
+MessageFactory = dict ({
+    '\x01': LoginRequest,
+    '\x02': LoginReply
+})
 
 class Parser(object):
     '''Provides parsing message utilities'''
-    def __init__(self, format=None):
-        self.format = format or \
-            Storage(lenpos = (2, 4), bof = '\xab\xcd',  eof = '\xdc\xba')
-        self.format.boflen = len(self.format.bof)
-        self.format.eoflen = len(self.format.eof)
+    BOF, EOF = '\xab\xcd', '\xdc\xba'
+    typos, lenpos = (2,3) , (3, 5)
+    boflen, eoflen = len(BOF), len(EOF)
+    
+    def __init__(self):
+        pass
+        
+    def type(self, msg):
+        t = msg[self.typos[0]:self.typos[1]]
+        return t in MessageFactory and t
         
     def bof(self, msg):
-        return self.format.bof == msg[:self.format.boflen]
+        return self.BOF == msg[:self.boflen]
         
     def eof(self, msg):
-        return self.format.eof == msg[-self.format.eoflen:]
+        return self.EOF == msg[-self.eoflen:]
 
     def len(self, msg):
         try:
-            return struct.unpack('!h', msg[self.format.lenpos[0]:self.format.lenpos[1]])[0]
+            return struct.unpack('!h', msg[self.lenpos[0]:self.lenpos[1]])[0]
         except:
             return -1
         
@@ -57,7 +70,7 @@ class Parser(object):
         return self.bof(msg) and self.eof(msg) and self.len(msg) == len(msg)
         
     def body(self, msg):
-        return self.valid(msg) and msg[self.format.lenpos[1] : -self.format.eoflen]
+        return self.valid(msg) and msg[self.lenpos[1] : -self.eoflen]
             
 
 class Packer(object):
