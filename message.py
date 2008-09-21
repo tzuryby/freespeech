@@ -30,6 +30,7 @@ __all__ = ['Parser', 'Packer']
 
 
 import struct
+from ctypes import create_string_buffer as create_buffer
 import Queue
 from messagetypes import *
 
@@ -70,7 +71,12 @@ class Parser(object):
         return self.bof(msg) and self.eof(msg) and self.len(msg) == len(msg)
         
     def body(self, msg):
-        return self.valid(msg) and msg[self.lenpos[1] : -self.eoflen]
+        if self.valid(msg):
+            buf = create_buffer(self.len())
+            buf.raw = msg[self.lenpos[1] : -self.eoflen]
+            return (self.type(msg), buf)
+        else:
+            return None
             
 
 class Packer(object):
