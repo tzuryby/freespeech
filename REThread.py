@@ -37,7 +37,7 @@ class REThread(threading.Thread):
 
     def run(self):
         '''Run target function, identical to threading.Thread.run().'''
-
+        
         if self.__target:
             try:
                 self._retval = self.__target(*self.__args, **self.__kwargs)
@@ -47,10 +47,8 @@ class REThread(threading.Thread):
 
     def return_value(self):
         '''Return value from target function.
-
         This can only be called after the thread has finished, i. e. when
         isAlive() is False and did not terminate with an exception.'''
-
         assert not self.isAlive()
         assert not self._exception
         return self._retval
