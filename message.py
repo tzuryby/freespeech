@@ -63,8 +63,8 @@ __author__ = 'Tzury Bar Yochay'
 __version__ = '0.1'
 __license__ = 'GPLv3'
 __all__ = ['Field', 'ByteField', 'CharField', 'ShortField', 'IntField', 'StringField', 'IPField', 
-    'BaseMessage', 'LoginRequest', 'LoginReply', 'MessageFactory', 
-    'Parser', 'Packer']
+    'BaseMessage', 'LoginRequest', 'LoginReply', 'ServerOverloaded', 'Logoff', 'KeepAlive', 'KeepAliveAck', 
+    'MessageFactory', 'Parser', 'Packer']
 
 import struct
 import Queue
@@ -199,19 +199,75 @@ class LoginRequest(BaseMessage):
             ('username', StringField, 1, lambda: '!%dc' % self.username_length.value ), 
             ('password', StringField, lambda: self.username.end, '!20c'), 
             ('local_ip', IPField, lambda: self.password.end), 
-            ('local_port', IntField, lambda: self.local_ip.end)
-        ]
-        
+            ('local_port', IntField, lambda: self.local_ip.end)]
+            
         BaseMessage.__init__(self, seq, *args, **kwargs)
 
 class LoginReply(BaseMessage):
     def __init__(self, *args, **kwargs):
         seq = [
-            ('global_ip', IPField, 0), 
-            ('local_port', IntField, lambda: self.local_ip.end())
-        ]
-        
+            ('client_ctx', StringField, 0, '!16c')
+            ('client_public_ip', IPField, 16), 
+            ('client_public_port', IntField, lambda: self.local_ip.end),
+            ('ctx_expire', IntField, lambda: self.client_public_port.end),
+            ('num_of_codecs', ByteField, lambda: self.ctx_expire.end),
+            ('codec_list', StringField, lambda: self.num_of_codecs.end, lambda: '!%dc' % self.num_of_codecs.value)]
+            
         BaseMessage.__init__(self, seq, *args, **kwargs)
+
+class ServerOverloaded(BaseMessage):
+    def __init__(self, *args, **kwargs):
+        seq = [('alternate_ip', IPField, 0)]
+        BaseMEssage.__init__(self, seq, *args, **kwargs)
+
+class Logoff(BaseMessage):
+    def __init__(self, *args, **kwargs):
+        seq = [('client_ctx', StringField, 0, '!16c')]
+        BaseMessage.__init__(self, seq, *args, **kwargs)
+    
+class KeepAlive(BaseMessage):
+    def __init__(self, *args, **kwargs):
+        seq = [
+            ('client_ctx', StringField, 0, '!16c')
+            ('client_public_ip', IPField, 16), 
+            ('client_public_port', IntField, lambda: self.local_ip.end)]
+        BaseMessage.__init__(self, seq, *args, **kwargs)
+
+class KeepAliveAck(BaseMessage):
+    def __init__(self, *args, **kwargs):
+        seq = [
+            ('client_ctx', StringField, 0, '!16c'),
+            ('expire', IntField, 16)]
+        BaseMessage.__init__(self, seq, *args, **kwargs)
+        
+class ClientInvite(BaseMessage):
+    def __init__(self, *args, **kwargs):
+        seq = [
+            ('client_ctx', StringField, 0, '!16c'),
+            ('other_name_length', ByteField, 16),
+            ('other_name', StringField, 17, lambda: '!%dc' % self.other_name_length.value),
+            ('num_of_codecs', ByteField, lambda: self.other_name.end),
+            ('codec_list', StringField, lambda: self.num_of_codecs.end, lambda: '!%dc' % self.num_of_codecs.value)]
+        BaseMessage.__init__(self, seq, *args, **kwargs) 
+
+class ServerRejectInvite(BaseMessage):
+    def __init__(self, *args, **kwargs):
+        seq = [
+            ('client_ctx', StringField, 0, '!16c'),
+            ('error_code', ShortField, 16)]
+        BaseMessage.__init__(self, seq, *args, **kwargs) 
+
+class ServerForwardInvite(BaseMessage):
+    def __init__(self, *args, **kwargs):
+        seq = [
+            ('client_ctx', StringField, 0, '!16c'),
+            ('other_name_length', ByteField, 16),
+            ('other_name', StringField, 17, lambda: '!%dc' % self.other_name_length.value),
+            ('client_public_ip', IPField, lambda: self.other_name.end), 
+            ('client_public_port', IntField, lambda: self.local_ip.end),
+            ('num_of_codecs', ByteField, lambda: self.client_public_port.end),
+            ('codec_list', StringField, lambda: self.num_of_codecs.end, lambda: '!%dc' % self.num_of_codecs.value)]
+        BaseMessage.__init__(self, seq, *args, **kwargs) 
 
 
 MessageFactory = Storage ({
@@ -227,7 +283,7 @@ MessageFactory.create = lambda _type, _buffer: MessageFactory[_t](buf=_buffer)
 class Parser(object):
     '''Provides parsing message utilities'''
     BOF, EOF = '\xab\xcd', '\xdc\xba'
-    typos, lenpos = (2,3) , (3, 5)
+    typos, lenpos = (2,4) , (4, 6)
     boflen, eoflen = len(BOF), len(EOF)
     
     def __init__(self):
