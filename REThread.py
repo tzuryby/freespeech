@@ -17,7 +17,8 @@ __author__ = 'Martin Pitt <martin.pitt@ubuntu.com>'
 __version__ = '0.1'
 __license__ = 'GPLv3'
 
-import threading, sys
+import threading
+import sys
 
 class REThread(threading.Thread):
     '''Enhanced threading.Thread which can deliver a return value and propagate

@@ -2,7 +2,7 @@
 
 '''
     **************************************
-    Message (part of freespeech.py)
+    messages.py (part of freespeech.py)
     **************************************
 
 Message Frames Structure:
@@ -57,22 +57,23 @@ class Packer(object)
     __init__(self, queue)
         expect an instanse of Queue.Queue() or any other object that has 'put' 
         method
+        
+Copyrights - 2008
+
 '''
 
 __author__ = 'Tzury Bar Yochay'
 __version__ = '0.1'
 __license__ = 'GPLv3'
+__all__ = ['Field', 'ByteField', 'CharField', 'ShortField', 'IntField', 
+    'StringField', 'IPField', 'BaseMessage', 'LoginRequest', 'LoginReply', 
+    'ServerOverloaded', 'Logoff', 'KeepAlive', 'KeepAliveAck', 'ClientInvite', 
+    'ServerRejectInvite', 'ServerForwardInvite', 'ClientAckInvite', 
+    'ServerForwardRing']
 
-# Copyrights - 2008
 
-__all__ = ['Field', 'ByteField', 'CharField', 'ShortField', 'IntField', 'StringField', 'IPField', 
-    'BaseMessage', 'LoginRequest', 'LoginReply', 'ServerOverloaded', 'Logoff', 'KeepAlive', 'KeepAliveAck', 
-    'ClientInvite', 'ServerRejectInvite', 'ServerForwardInvite', 'ClientAckInvite', 'ServerForwardRing',
-    'MessageFactory', 'Parser', 'Packer']
-
-import struct
+import struct, uuid
 from ctypes import create_string_buffer
-
 
 class Field(object):    
     def __init__(self, start, format):
@@ -143,6 +144,33 @@ class StringField(Field):
         else:
             raise AttributeError
 
+class UUIDField(Field):
+    def __init__(self, start):
+        Field.__init__(self, start, '!16c')
+        
+    def __setattr__(self, k, v):
+        if k == 'value':
+            '''a wrapper around x.value'''
+            # if you change the format you must change the length as well.
+            tp = type(v).__name__
+            switch = {
+                'UUID' : lambda v: v.bytes,
+                'str': lambda v: uuid.UUID(v).bytes,
+                'tuple': lambda v: uuid.UUID(bytes = ''.join(c for c in v))
+            }
+            print 'value:', v
+            self._value = switch[tp](v)
+                
+        else:
+            self.__dict__[k] = v
+        
+    def __getattr__(self, k):
+        if k == 'value':
+            return (c for c in str(self._value))
+        else:
+            raise AttributeError
+        
+        
 class IPField(Field):
     def __init__(self, start):
         Field.__init__(self, start, '!16b')
@@ -222,7 +250,7 @@ class ServerOverloaded(BaseMessage):
     def __init__(self, *args, **kwargs):
         seq = [('alternate_ip', IPField, 0)]
         
-        BaseMEssage.__init__(self, seq, *args, **kwargs)
+        BaseMessage.__init__(self, seq, *args, **kwargs)
 
 class Logoff(BaseMessage):
     def __init__(self, *args, **kwargs):
@@ -242,7 +270,7 @@ class KeepAlive(BaseMessage):
 class KeepAliveAck(BaseMessage):
     def __init__(self, *args, **kwargs):
         seq = [
-            ('client_ctx', StringField, 0, '!16c'),
+            ('client_ctx', UUIDField, 0), #, '!16c'),
             ('expire', IntField, 16)]
         
         BaseMessage.__init__(self, seq, *args, **kwargs)
@@ -278,12 +306,12 @@ class ServerForwardInvite(BaseMessage):
             ('codec_list', StringField, lambda: self.num_of_codecs.end, lambda: '!%dc' % self.num_of_codecs.value)]
         
         BaseMessage.__init__(self, seq, *args, **kwargs) 
-
+        
 class ClientAckInvite(BaseMessage):
     def __init__(self, *args, **kwargs):
         seq = [
-            ('client_ctx', StringField, 0, '!16c')
-            ('client_status', ByteField, 16)
+            ('client_ctx', StringField, 0, '!16c'),
+            ('client_status', ByteField, 16),
             ('client_public_ip', IPField, 17), 
             ('client_public_port', IntField, lambda: self.public_ip.end)]
         
@@ -291,3 +319,23 @@ class ClientAckInvite(BaseMessage):
 
 class ServerForwardRing(ClientAckInvite):
     pass
+
+
+class ClientContactListRequest(BaseMessage):
+    def __init__(self, *args, **kwargs):
+        seq = [
+            ('client_ctx', StringField, 0, '!16c'),
+            ('list_length', ByteField, 1),
+            ('list_entries', StringField, 2, lambda: '!%dc' % self.list_length.value)
+        ]
+        
+        BaseMessage.__init__(self, seq, *args, **kwargs)
+        
+        
+if __name__ == '__main__':
+    ka =KeepAliveAck()
+    buf = uuid.uuid4().bytes
+    buf += '\x01\x01\x01\x01'
+    ka.deserialize(buf)
+    print ka.client_ctx
+    print ka.expire

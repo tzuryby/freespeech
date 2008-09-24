@@ -1,5 +1,56 @@
-import struct
+#!/usr/bin/env python
 
+'''
+    **************************************
+    messageparser.py (part of freespeech.py)
+    **************************************
+
+Message Frames Structure:
+    A.B.C.D.TYPE.LEN.LEN.BDY.BDY---.BDY.BDY.D.C.B.A        
+
+class Parser(object)
+    Provides parsing message utilities
+        bof(): returns true if the message begins with the bof bytes
+        eof(): returns true if the message ends with the eof bytes
+        len(): returns the len as described in the message body (expected length)
+        valid(): returns true if message begins and ends correctly and expected 
+                 length == real length
+        body(): returns a tuple (type, body) 
+                body = the message body i.e. without the bof, eof, type and the 
+                length
+
+class Packer(object)
+    Receives messages or parts of messages and pack them and put them in 
+    the provided queue when they are ready, i.e. message  valid and complete.
+    __init__(self, queue)
+        expect an instanse of Queue.Queue() or any other object that has 'put' 
+        method
+        
+        
+# Copyrights (c) - 2008
+
+'''
+
+__author__ = 'Tzury Bar Yochay'
+__version__ = '0.1'
+__license__ = 'GPLv3'
+__all__ = ['MessageFactory', 'Parser', 'Packer']
+
+
+import struct
+from utils import Storage
+from messages import *
+
+
+MessageFactory = Storage ({
+    '\x01': LoginRequest,
+    '\x02': LoginReply
+})
+
+# Parser.body returns a tuple of (type, buffer) 
+# Therefore you can call MessageFactory.create(*Parser.body(msg))
+MessageFactory.create = lambda _type, _buffer: MessageFactory[_t](buf=_buffer)
+    
 class Parser(object):
     '''Provides parsing message utilities'''
     BOF, EOF = '\xab\xcd', '\xdc\xba'

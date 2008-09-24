@@ -4,10 +4,10 @@
     Database connectivity layer (part of freespeech.py)
     **************************************
 '''
-import sqlite3
-from utils import Hashtable
-
 __all__ = ['db']
+
+import sqlite3
+from utils import Storage
 
 class _db(object):
     def __init__(self):
@@ -47,7 +47,7 @@ class _db(object):
             names = [x[0] for x in cur.description]
             row = cur.fetchone()
             while row:
-                yield Hashtable(dict(zip(names, row)))
+                yield Storage(dict(zip(names, row)))
                 row = cur.fetchone()
             self.close()
         except:
