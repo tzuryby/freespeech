@@ -56,7 +56,7 @@ __version__ = '0.1'
 __license__ = 'GPLv3'
 __all__ = ['StreamServer', 'DatagramServer', 'serve']
 
-import sys, socket, SocketServer, threading
+import sys, socket, SocketServer, threading, uuid
 
 from socket import *
 from SocketServer import *
@@ -81,7 +81,7 @@ class StreamServer(BaseRequestHandler):
     def handle(self):
         data = 'dummy'
         while data and self.run:
-            data = self.request.recv(1024)
+            data = self.request.recv(4*1024)
             data and self.handler and self.handler(self.client_address, data)
     
     def send(self, msg):
@@ -120,11 +120,7 @@ class DatagramServer(object):
             pass
         
     def send(self, msg, addr):
-        print 'udp::send', msg, addr
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        s.connect(addr[0], 3333)
-        s.send(msg)
-        s.close()
+        self.socket.sendto(msg, addr)
         
     def stop(self):
         try:
@@ -132,46 +128,19 @@ class DatagramServer(object):
             self.socket.close()
         except:
             pass
-        
-def _serve(proto, addr, port, handler, id=None):
-    def serve_udp(addr, port, handler, id=None):
-        DatagramServer(addr, port, handler).start()
-        
-    def serve_tcp(addr, port, handler, id=None):
-        SocketServer.ThreadingTCPServer((addr, port), StreamServer(handler, id)).serve_forever()
-        
-    table = {'udp': serve_udp , 'tcp': serve_tcp}
-    proto in table and table[proto](addr, port, handler, id)
-    
-def serve(proto, addr, port, handler, id=None):
-    t = Thread(target = _serve, args = (proto, addr, port, handler, id))
-    t.start()
-    print 'serving %s at %s:%s' % (proto, addr, port)
-    return t
 
-def duplex_server(proto, addr, port, handler, register):
+def serve(proto, addr, port, handler, register):
     def tcp(addr, port, handler, register):
         req_handler = StreamServer(handler, register)
         SocketServer.ThreadingTCPServer((addr, port), req_handler).serve_forever()
     
     def udp(addr, port, handler, register):
         DatagramServer(addr, port, handler, register).start()
+    
+    targets = {'tcp': tcp, 'udp': udp}
+    
+    if proto in targets:
+        t = Thread(target = targets[proto], args = (addr, port, handler, register))
+        t.start()
+        print 'serving %s at %s:%s' % (proto, addr, port)
         
-    target = proto == 'tcp' and tcp or udp
-    t = Thread(target = target, args = (addr, port, handler, register))
-    t.start()
-    print 'serving %s at %s:%s' % (proto, addr, port)
-        
-
-def main():
-    def printer(addr, data):
-        print 'from:%s, %s' % (addr, data)
-        
-    if (len(sys.argv)>2):
-        proto, port = sys.argv[1], int(sys.argv[2])
-        serve(proto, 'localhost', port, printer)
-    else:
-        print 'Usage: python serverfactory.py protocol_name port_number\ne.g. [python serverfactory.py udp 50008]'
-
-if __name__ == '__main__':
-    main()
