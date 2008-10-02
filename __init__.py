@@ -15,7 +15,6 @@ from db import *
 from serverfactory import *
 from messages import *
 from messageparser import *
-from REThread import *
 from threadpool import *
 from codecs import *
 from daemon import *

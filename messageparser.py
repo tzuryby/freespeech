@@ -34,23 +34,40 @@ class Packer(object)
 __author__ = 'Tzury Bar Yochay'
 __version__ = '0.1'
 __license__ = 'GPLv3'
-__all__ = ['MessageFactory', 'Parser', 'Packer']
+__all__ = ['MessageFactory', 'Parser', 'Packer', 'MessageTypes']
 
 
 import struct
+from ctypes import create_string_buffer
 from utils import Storage
 from messages import *
 
-
-MessageFactory = Storage ({
-    '\x01': LoginRequest,
-    '\x02': LoginReply
+MessageTypes = Storage({
+    '\x00\x01': LoginRequest,
+    '\x00\x02': LoginReply,
+    '\x00\x03': Logout,
+    '\x00\x04': KeepAlive,
+    '\x00\x05': KeepAliveAck,
+    '\x00\x06': ClientInvite,
+    '\x00\x07': ClientAckInvite,
+    '\x00\x08': ServerForwardInvite,
+    '\x00\x09': ServerRejectInvite,
+    '\x00\x0a': ServerForwardRing,
+    '\x00\x0b': ClientContactListRequest,
+    '\x00\x0c': ServerOverloaded
 })
 
-# Parser.body returns a tuple of (type, buffer) 
-# Therefore you can call MessageFactory.create(*Parser.body(msg))
-MessageFactory.create = lambda _type, _buffer: MessageFactory[_t](buf=_buffer)
-    
+message_factory = type(
+    'message_factory', 
+    (object,), 
+    {'create':  
+        lambda self, msg_type, buf: (
+            msg_type in MessageTypes and MessageTypes[msg_type](buf=buf) or None
+            )
+    })
+
+MessageFactory = message_factory()
+
 class Parser(object):
     '''Provides parsing message utilities'''
     BOF, EOF = '\xab\xcd', '\xdc\xba'
@@ -62,7 +79,7 @@ class Parser(object):
         
     def parse_type(self, msg):
         t = msg[self.typos[0]:self.typos[1]]
-        return t in MessageFactory and t
+        return t in MessageTypes and t
         
     def bof(self, msg):
         return self.BOF == msg[:self.boflen]
@@ -77,31 +94,41 @@ class Parser(object):
             return -1
         
     def valid(self, msg):
-        return self.bof(msg) and self.eof(msg) and self.length(msg) == len(msg)
+        return self.bof(msg) and self.eof(msg) and self.length(msg) == len(self._body(msg))
+        
+    def _body(self, msg):
+        buf = create_string_buffer(self.length(msg))
+        buf.raw = msg[self.lenpos[1] : -self.eoflen]
+        return buf
         
     def body(self, msg):
         if self.valid(msg):
-            buf = create_string_buffer(self.length(msg))
-            buf.raw = msg[self.lenpos[1] : -self.eoflen]
-            return (self.parse_type(msg), buf)
+            return (self.parse_type(msg), self._body(msg))
         else:
             return None
-            
+
 class Packer(object):
-    '''Pack parts of message into a message and enqueue it'''
+    '''Packs parts of message into a message and enqueue it'''
     def __init__(self, queue):
         self.clients = dict()
         self.queue = queue
         self.parser = Parser()
         
-    def pack(self, data):
-        client, msg = data
+    def pack(self, client, msg):
+        print 'packing', msg
         self._recv(client, msg)
         if self.parser.eof(msg):
             # get the whole message
             msg = self.clients[client]
             if self.parser.valid(msg):
-                self.queue.put((client, self.parser.body(self.clients[client])))
+                msg_type, buf = self.parser.body(self.clients[client])
+                if msg_type in MessageTypes:
+                    msg_type = MessageTypes[msg_type]
+                    cm = CommMessage(client, msg_type, buf)
+                    self.queue.put(cm)
+                else:
+                    print 'Unknown message type: %s', message_type 
+                    
             del self.clients[client]
         
     # receives the message and store it in the clients[client]

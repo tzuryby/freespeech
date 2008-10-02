@@ -65,16 +65,30 @@ Copyrights - 2008
 __author__ = 'Tzury Bar Yochay'
 __version__ = '0.1'
 __license__ = 'GPLv3'
-__all__ = ['Field', 'ByteField', 'CharField', 'ShortField', 'IntField', 
+__all__ = ['CommMessage', 'Field', 'ByteField', 'CharField', 'ShortField', 'IntField', 
     'StringField', 'IPField', 'BaseMessage', 'LoginRequest', 'LoginReply', 
-    'ServerOverloaded', 'Logoff', 'KeepAlive', 'KeepAliveAck', 'ClientInvite', 
+    'ServerOverloaded', 'Logout', 'KeepAlive', 'KeepAliveAck', 'ClientInvite', 
     'ServerRejectInvite', 'ServerForwardInvite', 'ClientAckInvite', 
-    'ServerForwardRing']
-
+    'ServerForwardRing', 'ClientContactListRequest']
 
 import struct, uuid
 from ctypes import create_string_buffer
+from md5 import new as md5
+from decorator import printargs
 
+class CommMessage(object):
+    '''Wrapping message with additional data.
+    Encapsulates the address, the type and the context for the message
+    '''
+    def __init__(self, addr, msg_type, body):
+        self.addr = addr
+        self.msg_type = msg_type
+        self.body = body
+        self.ctx = md5(str(addr)).digest()
+        
+    def __repr__(self):
+        return 'from %s, type %s, msg %s' % (self.addr, self.msg_type, self.body)
+        
 class Field(object):    
     def __init__(self, start, format):
         self._value = None
@@ -84,7 +98,7 @@ class Field(object):
         self.end = self.start + self.length
         
     def pack_into(self, buf):
-        struct.pack_into(self.format, buf, self.start, *self.value)
+        struct.pack_into(self.format, buf, self.start, *self._value)
         
     def unpack_from(self, buf):
         self.value = struct.unpack_from(self.format, buf, self.start)
@@ -98,7 +112,7 @@ class Field(object):
         
     def __getattr__(self, k):
         if k == 'value':
-            return self._value
+            return len(self._value) == 1 and self._value[0] or self._value
         else:
             raise AttributeError
         
@@ -144,33 +158,10 @@ class StringField(Field):
         else:
             raise AttributeError
 
-class UUIDField(Field):
+class UUIDField(StringField):
     def __init__(self, start):
-        Field.__init__(self, start, '!16c')
-        
-    def __setattr__(self, k, v):
-        if k == 'value':
-            '''a wrapper around x.value'''
-            # if you change the format you must change the length as well.
-            tp = type(v).__name__
-            switch = {
-                'UUID' : lambda v: v.bytes,
-                'str': lambda v: uuid.UUID(v).bytes,
-                'tuple': lambda v: uuid.UUID(bytes = ''.join(c for c in v))
-            }
-            print 'value:', v
-            self._value = switch[tp](v)
+        StringField.__init__(self, start, '!16c')
                 
-        else:
-            self.__dict__[k] = v
-        
-    def __getattr__(self, k):
-        if k == 'value':
-            return (c for c in str(self._value))
-        else:
-            raise AttributeError
-        
-        
 class IPField(Field):
     def __init__(self, start):
         Field.__init__(self, start, '!16b')
@@ -185,8 +176,8 @@ class BaseMessage(object):
             self.deserialize()
             
         elif 'length' in kwargs:
-            self.buf = create_string_buffer(kwargs['length'])
-    
+            self.buf = create_string_buffer(kwargs['length'])   
+
     def _setbuffer(self, buf):
         if not self.buf:
             self.buf = create_string_buffer(len(buf))
@@ -222,7 +213,6 @@ class BaseMessage(object):
             
         return self.buf
     
-
 class LoginRequest(BaseMessage):    
     def __init__(self, *args, **kwargs):
         seq = [
@@ -237,7 +227,7 @@ class LoginRequest(BaseMessage):
 class LoginReply(BaseMessage):
     def __init__(self, *args, **kwargs):
         seq = [
-            ('client_ctx', StringField, 0, '!16c')
+            ('client_ctx', StringField, 0, '!16c'),
             ('client_public_ip', IPField, 16), 
             ('client_public_port', IntField, lambda: self.client_public_ip.end),
             ('ctx_expire', IntField, lambda: self.client_public_port.end),
@@ -252,7 +242,7 @@ class ServerOverloaded(BaseMessage):
         
         BaseMessage.__init__(self, seq, *args, **kwargs)
 
-class Logoff(BaseMessage):
+class Logout(BaseMessage):
     def __init__(self, *args, **kwargs):
         seq = [('client_ctx', StringField, 0, '!16c')]
         
@@ -320,7 +310,6 @@ class ClientAckInvite(BaseMessage):
 class ServerForwardRing(ClientAckInvite):
     pass
 
-
 class ClientContactListRequest(BaseMessage):
     def __init__(self, *args, **kwargs):
         seq = [
@@ -329,13 +318,12 @@ class ClientContactListRequest(BaseMessage):
             ('list_entries', StringField, 2, lambda: '!%dc' % self.list_length.value)
         ]
         
-        BaseMessage.__init__(self, seq, *args, **kwargs)
-        
+        BaseMessage.__init__(self, seq, *args, **kwargs)      
         
 if __name__ == '__main__':
     ka =KeepAliveAck()
     buf = uuid.uuid4().bytes
     buf += '\x01\x01\x01\x01'
     ka.deserialize(buf)
-    print ka.client_ctx
-    print ka.expire
+    print ''.join(ka.client_ctx.value)
+    print ka.expire.value

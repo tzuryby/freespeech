@@ -3,16 +3,15 @@ import serverfactory
 
 clients = {}
 
-def register(client, request, proto):
-    clients[client] = (request, proto)
+def register(client, request, proto, id):
+    clients[client] = (request, proto, id)
     print clients
     
-def handler(client, msg):
+def handler(client, msg, id):
     print 'from', client, msg
     if clients[client][1] == 'tcp':
         clients[client][0].send('reply: ' + msg)
     elif clients[client][1] == 'udp':
-        print 'attempt to send udp'
         clients[client][0].send(msg, client)
     
     

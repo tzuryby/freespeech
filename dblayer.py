@@ -2,20 +2,29 @@
 
 import re
 from db import db
-from utils import Hashtable
+from utils import Storage
 
-__all__ = ['Config']
+__all__ = ['Config', 'Users']
     
 def config():
-    table = Hashtable()
+    table = Storage()
     for row in db.select('select key, value, fn from config'):
         table[row.key] = eval(row.fn % row.value)
     return table
     
 Config = config()
 
+def users():
+    users = Storage()
+    for row in db.select('select * from users'):
+        users[row.username] = row
+    return users
+    
+Users = users()
 
 if __name__ == '__main__':
     for key in Config.keys():
         print key, Config[key]
-        
+
+    for user in Users:
+        print Users[user]

@@ -68,6 +68,7 @@ class StreamServer(BaseRequestHandler):
         self.run = True
         self.handler = handler
         self.register = register
+        self.id = uuid.uuid4()
         
     # nice hack! super.__init__ will be called
     def __call__(*args):
@@ -76,13 +77,15 @@ class StreamServer(BaseRequestHandler):
     def setup(self):
         print self.client_address, 'connected!'
         if self.register:
-            self.register(self.client_address, self, 'tcp')
+            self.register(self.client_address, self, 'tcp', self.id)
         
     def handle(self):
         data = 'dummy'
         while data and self.run:
             data = self.request.recv(4*1024)
-            data and self.handler and self.handler(self.client_address, data)
+            if data and self.handler:
+                print 'received:', self.client_address, data
+                self.handler(self.client_address, data)
     
     def send(self, msg):
         self.request.send(msg)
@@ -91,9 +94,6 @@ class StreamServer(BaseRequestHandler):
         print self.client_address, 'disconnected!'
         self.request.send('bye ' + str(self.client_address) + '\n')
         
-    def sender(self):
-        return self.send
-        
 #UDP        
 class DatagramServer(object):
     def __init__(self, addr, port, handler=None, register=None):
@@ -101,17 +101,19 @@ class DatagramServer(object):
         self.port = port
         self.handler = handler
         self.register = register
-        self.run = True
         self.socket = socket(AF_INET,SOCK_DGRAM)
-        
+        self.id = uuid.uuid4()
+        self.run = True
+                
     def start(self):
         try:
             self.socket.bind((self.addr, self.port))
             while self.run:
                 data, addr = self.socket.recvfrom(4*1024)
                 if data:
+                    print 'received:', self.client_address, data
                     if self.register:
-                        self.register(addr, self, 'udp')
+                        self.register(addr, self, 'udp', self.id)
                     if self.handler:
                         self.handler(addr, data)
                 
