@@ -36,13 +36,12 @@ __version__ = '0.1'
 __license__ = 'GPLv3'
 __all__ = ['MessageFactory', 'Parser', 'Packer', 'MessageTypes']
 
-
 import struct
 from ctypes import create_string_buffer
 from utils import Storage
 from messages import *
 
-MessageTypes = Storage({
+MessageTypes = dict({
     '\x00\x01': LoginRequest,
     '\x00\x02': LoginReply,
     '\x00\x03': Logout,
@@ -57,16 +56,19 @@ MessageTypes = Storage({
     '\x00\x0c': ServerOverloaded
 })
 
-message_factory = type(
-    'message_factory', 
-    (object,), 
-    {'create':  
-        lambda self, msg_type, buf: (
-            msg_type in MessageTypes and MessageTypes[msg_type](buf=buf) or None
-            )
-    })
+#~ message_factory = type(
+    #~ 'message_factory', 
+    #~ (object,), 
+    #~ {'create':  
+        #~ lambda self, msg_type, buf: (
+            #~ msg_type in MessageTypes and MessageTypes[msg_type](buf=buf) or None
+            #~ )
+    #~ })
 
-MessageFactory = message_factory()
+MessageFactory = Storage(create=lambda msg_type, buf: msg_type in MessageTypes 
+    and MessageTypes[msg_type](buf=buf) or None )
+    
+#message_factory()
 
 class Parser(object):
     '''Provides parsing message utilities'''
