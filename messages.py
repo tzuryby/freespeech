@@ -65,12 +65,20 @@ Copyrights - 2008
 __author__ = 'Tzury Bar Yochay'
 __version__ = '0.1'
 __license__ = 'GPLv3'
-__all__ = ['CommMessage', 'Field', 'ByteField', 'CharField', 'ShortField', 'IntField', 
-    'StringField', 'IPField', 'BaseMessage', 'LoginRequest', 'LoginReply', 
-    'ServerOverloaded', 'Logout', 'KeepAlive', 'KeepAliveAck', 'ClientInvite', 
-    'ServerRejectInvite', 'ServerForwardInvite', 'ClientAckInvite', 
-    'ServerForwardRing', 'SyncAddressBook', 'ShortResponse']
-
+__all__ = ['BaseMessage', 'ByteField', 'ChangeStatus', 'CharField', 'ClientAnswer', 
+    'ClientHangupRequest', 'ClientHangupRequestAck', 'ClientInvite', 'ClientInviteAck', 
+    'ClientRTP', 'CommMessage', 'Field', 'Hangup', 'IPField', 'IntField', 'KeepAlive', 
+    'KeepAliveAck', 'LoginReply', 'LoginRequest', 'Logout', 'ServerForwardAnswer', 
+    'ServerForwardHangupRequest', 'ServerForwardInvite', 'ServerForwardRing', 
+    'ServerHangupRequestAck', 'ServerOverloaded', 'ServerRTPRelay', 
+    'ServerRejectInvite', 'ShortField', 'ShortResponse', 'StringField', 'UUIDField']
+    
+    #~ ['CommMessage', 'Field', 'ByteField', 'CharField', 'ShortField', 'IntField', 
+    #~ 'StringField', 'IPField', 'BaseMessage', 'LoginRequest', 'LoginReply', 
+    #~ 'ServerOverloaded', 'Logout', 'KeepAlive', 'KeepAliveAck', 'ClientInvite', 
+    #~ 'ServerRejectInvite', 'ServerForwardInvite', 'ClientAckInvite', 
+    #~ 'ServerForwardRing', 'SyncAddressBook', 'ShortResponse']
+    
 import struct, uuid
 from ctypes import create_string_buffer
 from md5 import new as md5
@@ -182,7 +190,8 @@ class IPField(Field):
         '''a wrapper around x.value'''
         if k == 'value':
             if type(v).__name__ == 'str':
-                v = [int(o) for o in v.split('.')] + [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+                v = [int(o) for o in v.split('.')] + [0, 0, 0, 0, 0, 
+                    0, 0, 0, 0, 0, 0, 0]
                 self._value = v
             else:
                 self._value = v
@@ -204,7 +213,7 @@ class BaseMessage(object):
     def _init_buffer(self, newbuffer=None):
         
         if not self.buf and not newbuffer:
-            length = sum((self.__dict__[p[0]].length for p in self.seq))
+            length = sum((self.dict[field[0]].length for field in self.seq))
             self.buf = create_string_buffer(length)
             
         elif newbuffer:
@@ -308,7 +317,7 @@ class KeepAlive(BaseMessage):
         seq = [
             ('client_ctx', UUIDField, 0),
             ('client_public_ip', IPField, 16), 
-            ('client_public_port', IntField, lambda: self.local_ip.end)]
+            ('client_public_port', IntField, lambda: self.client_public_ip.end)]
         
         BaseMessage.__init__(self, seq, *args, **kwargs)
 
@@ -316,7 +325,8 @@ class KeepAliveAck(BaseMessage):
     def __init__(self, *args, **kwargs):
         seq = [
             ('client_ctx', UUIDField, 0),
-            ('expire', IntField, 16)]
+            ('expire', IntField, 16),
+            ('refresh_contact_list', ByteField, lambda: self.expire.end)]
         
         BaseMessage.__init__(self, seq, *args, **kwargs)
         
@@ -330,7 +340,7 @@ class ClientInvite(BaseMessage):
             ('codec_list', StringField, lambda: self.num_of_codecs.end, lambda: '!%dc' % self.num_of_codecs.value)]
         
         BaseMessage.__init__(self, seq, *args, **kwargs) 
-
+        
 class ServerRejectInvite(BaseMessage):
     def __init__(self, *args, **kwargs):
         seq = [
@@ -343,35 +353,80 @@ class ServerForwardInvite(BaseMessage):
     def __init__(self, *args, **kwargs):
         seq = [
             ('client_ctx', UUIDField, 0),
-            ('other_name_length', ByteField, 16),
-            ('other_name', StringField, 17, lambda: '!%dc' % self.other_name_length.value),
-            ('client_public_ip', IPField, lambda: self.other_name.end), 
-            ('client_public_port', IntField, lambda: self.local_ip.end),
+            ('call_ctx', UUIDField, lambda: self.client_ctx.end),
+            ('call_type', ByteField, lambda: self.call_ctx.end),
+            ('client_name_length', ByteField, lambda: self.call_type.end),
+            ('client_name', StringField, lambda: self.client_name_length.end, lambda: '!%dc' % self.client_name_length.value),
+            ('client_public_ip', IPField, lambda: self.client_name.end), 
+            ('client_public_port', IntField, lambda: self.client_public_ip.end),
             ('num_of_codecs', ByteField, lambda: self.client_public_port.end),
             ('codec_list', StringField, lambda: self.num_of_codecs.end, lambda: '!%dc' % self.num_of_codecs.value)]
         
         BaseMessage.__init__(self, seq, *args, **kwargs) 
         
-class ClientAckInvite(BaseMessage):
+class ClientInviteAck(BaseMessage):
     def __init__(self, *args, **kwargs):
         seq = [
             ('client_ctx', UUIDField, 0),
-            ('client_status', ByteField, 16),
-            ('client_public_ip', IPField, 17), 
-            ('client_public_port', IntField, lambda: self.public_ip.end)]
+            ('call_ctx', UUIDField, lambda: self.client_ctx.end),
+            ('client_status', ByteField, lambda: self.call_ctx.end),
+            ('client_public_ip', IPField, lambda: self.client_status.end), 
+            ('client_public_port', IntField, lambda: self.client_public_ip.end)]
         
         BaseMessage.__init__(self, seq, *args, **kwargs)
 
-class ServerForwardRing(ClientAckInvite):
+class ServerForwardRing(ClientInviteAck):
     pass
 
-class SyncAddressBook(BaseMessage):
+class ClientAnswer(BaseMessage):
     def __init__(self, *args, **kwargs):
         seq = [
             ('client_ctx', UUIDField, 0),
-            ('list_length', ByteField, 1),
-            ('list_entries', StringField, 2, lambda: '!%dc' % self.list_length.value)
-        ]
+            ('call_ctx', UUIDField, lambda: self.client_ctx.end),
+            ('codec', ByteField, lambda: self.call_ctx.end)]
+        
+        BaseMessage.__init__(self, seq, *args, **kwargs)
+        
+class ServerForwardAnswer(ClientAnswer):
+    pass
+    
+class ClientRTP(BaseMessage):
+    def __init__(self, *args, **kwargs):
+        seq = [
+            ('client_ctx', UUIDField, 0),
+            ('call_ctx', UUIDField, lambda: self.client_ctx.end),
+            ('rtp_bytes', StringField, lambda: self.call_ctx.end, 1024*4)]
+        
+        BaseMessage.__init__(self, seq, *args, **kwargs)
+        
+class ServerRTPRelay(ClientRTP):
+    pass
+    
+class Hangup(BaseMessage):
+    def __init__(self, *args, **kwargs):
+        seq = [
+            ('client_ctx', UUIDField, 0),
+            ('call_ctx', UUIDField, lambda: self.client_ctx.end)]
+            
+        BaseMessage.__init__(self, seq, *args, **kwargs)
+            
+class ClientHangupRequest(Hangup):
+    pass
+    
+class ServerForwardHangupRequest(Hangup):
+    pass
+    
+class ClientHangupRequestAck(Hangup):
+    pass
+    
+class ServerHangupRequestAck(Hangup):
+    pass
+
+class ChangeStatus(BaseMessage):
+    def __init__(self, *args, **kwargs):
+        seq = [
+            ('client_ctx', UUIDField, 0),
+            ('status', ByteField, lambda: self.client_ctx.end)]
         
         BaseMessage.__init__(self, seq, *args, **kwargs)
         
