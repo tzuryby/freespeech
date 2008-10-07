@@ -52,23 +52,12 @@ MessageTypes = dict({
     '\x00\x08': ServerForwardInvite,
     '\x00\x09': ServerRejectInvite,
     '\x00\x0a': ServerForwardRing,
-    '\x00\x0b': ClientContactListRequest,
+    '\x00\x0b': SyncAddressBook,
     '\x00\x0c': ServerOverloaded
 })
 
-#~ message_factory = type(
-    #~ 'message_factory', 
-    #~ (object,), 
-    #~ {'create':  
-        #~ lambda self, msg_type, buf: (
-            #~ msg_type in MessageTypes and MessageTypes[msg_type](buf=buf) or None
-            #~ )
-    #~ })
-
-MessageFactory = Storage(create=lambda msg_type, buf: msg_type in MessageTypes 
-    and MessageTypes[msg_type](buf=buf) or None )
-    
-#message_factory()
+MessageFactory = Storage(
+    create= lambda msg_type, buf: msg_type in MessageTypes and MessageTypes[msg_type](buf=buf) or None )
 
 class Parser(object):
     '''Provides parsing message utilities'''

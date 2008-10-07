@@ -69,7 +69,7 @@ __all__ = ['CommMessage', 'Field', 'ByteField', 'CharField', 'ShortField', 'IntF
     'StringField', 'IPField', 'BaseMessage', 'LoginRequest', 'LoginReply', 
     'ServerOverloaded', 'Logout', 'KeepAlive', 'KeepAliveAck', 'ClientInvite', 
     'ServerRejectInvite', 'ServerForwardInvite', 'ClientAckInvite', 
-    'ServerForwardRing', 'ClientContactListRequest', 'ShortResponse']
+    'ServerForwardRing', 'SyncAddressBook', 'ShortResponse']
 
 import struct, uuid
 from ctypes import create_string_buffer
@@ -101,20 +101,22 @@ class CommMessage(object):
         
 class Field(object):    
     def __init__(self, start, format):
-        self._value = None
-        self.start = start
-        self.format = format
+        self._value = None      # value of the field
+        self.start = start      # starting position on the buffer
+        self.format = format    # pack/unpack format
         self.length = struct.calcsize(self.format)
         self.end = self.start + self.length
         
     def pack_into(self, buf):
+        '''packs the value into a supplied buffer'''
         struct.pack_into(self.format, buf, self.start, *self._value)
         
     def unpack_from(self, buf):
+        '''unpack the value from a supplied buffer'''
         self.value = struct.unpack_from(self.format, buf, self.start)
     
     def __setattr__(self, k, v):
-        '''a wrapper around x.value'''
+        '''a wrapper around x.value ensure _value will always be a tuple'''
         if k == 'value':
             self._value = isinstance(v, tuple) and v or (v,)
         else:
@@ -125,13 +127,13 @@ class Field(object):
             return len(self._value) == 1 and self._value[0] or self._value
         else:
             raise AttributeError
-        
+            
     def __repr__(self):
         return str(self._value)
         
     def length(self):
         return struct.calcsize(self.format)
-                
+        
 class ByteField(Field):
     def __init__(self, start):
         Field.__init__(self, start, '!b')
@@ -161,17 +163,17 @@ class StringField(Field):
             self._value = ''.join(v)
         else:
             self.__dict__[k] = v
-        
+            
     def __getattr__(self, k):
         if k == 'value':
             return (c for c in self._value)
         else:
             raise AttributeError
-
+            
 class UUIDField(StringField):
     def __init__(self, start):
         StringField.__init__(self, start, '!16c')
-                
+        
 class IPField(Field):
     def __init__(self, start):
         Field.__init__(self, start, '!16b')
@@ -186,61 +188,67 @@ class IPField(Field):
                 self._value = v
         else:
             self.__dict__[k] = v
-
+            
 class BaseMessage(object):
     def __init__(self, seq = [], *args, **kwargs):
         self.seq = seq
         self.buf = None
         
         if 'buf' in kwargs:
-            self._setbuffer(kwargs['buf'])
+            self._init_buffer(kwargs['buf'])
             self.deserialize()
             
         elif 'length' in kwargs:
             self.buf = create_string_buffer(kwargs['length'])   
-
-    def _setbuffer(self, buf=None):
-        if buf:
-            # self.buf never initiated
-            if not self.buf:
-                self.buf = create_string_buffer(len(buf))
             
-            if hasattr(buf, 'raw'):
-                self.buf = buf            
-            # convert string into writeable-buffer
-            elif type(buf).__name__ == 'str':
-                self.buf.raw = buf
-                
-        elif not self.buf:
+    def _init_buffer(self, newbuffer=None):
+        
+        if not self.buf and not newbuffer:
             length = sum((self.__dict__[p[0]].length for p in self.seq))
             self.buf = create_string_buffer(length)
             
+        elif newbuffer:
+            # self.buf never initiated
+            if not self.buf:
+                self.buf = create_string_buffer(len(newbuffer))
+                
+            # assign or copy the value into self.buf
+            if hasattr(newbuffer, 'raw'):
+                self.buf = newbuffer
+                
+            # convert string into writeable-buffer
+            elif isinstance(newbuffer,str):
+                self.buf.raw = newbuffer
+                
+        #~ elif not self.buf:
+            #~ length = sum((self.__dict__[p[0]].length for p in self.seq))
+            #~ self.buf = create_string_buffer(length)
+            
     def deserialize(self, buf=None):
         if buf:
-            self._setbuffer(buf)
+            self._init_buffer(buf)
             
         if self.buf:
             for params in self.seq:
-                key, constructor, start = params[0], params[1] , params[2]
+                key, ctr, start = params[0], params[1] , params[2]
                 format = len(params) == 4 and params[3] or None
-                # in case of starting point is a lambda expression
+                # in case of starting point is a callable
                 if hasattr(start, '__call__'):
                     start = start()
-                # in case of format is a lambda expression
+                # in case of format is a callable
                 if format:
                     if hasattr(format, '__call__'):
                         format = format()
-                    self.__dict__[key] = params[1](start, format)
+                    self.__dict__[key] = ctr(start, format)
                 else:
-                    self.__dict__[key] = params[1](start)
+                    self.__dict__[key] = ctr(start)
                     
                 self.__dict__[key].unpack_from(self.buf)
                 
     def set_values(self, **kwargs):
         for params in self.seq:
             if params[0] in kwargs:
-                key, constructor, start, format = params[0], params[1] , params[2], None
-                
+                key, ctr, start, format = params[0], params[1] , params[2], None                
                 start = hasattr(start, '__call__') and start() or start
                 args = [start]
                 if len(params) == 4:
@@ -250,11 +258,11 @@ class BaseMessage(object):
                         format = format()
                     args.append(format)
                     
-                self.__dict__[key] = params[1](*args)                   
+                self.__dict__[key] = ctr(*args)
                 self.__dict__[key].value = kwargs[key]
         
     def serialize(self):
-        self._setbuffer()
+        self._init_buffer()
         for params in self.seq:
             self.__dict__[params[0]].pack_into(self.buf)
             
