@@ -227,40 +227,15 @@ class BaseMessage(object):
             self._init_buffer(buf)
             
         if self.buf:
-            start = 0
-            for params in self.seq:
-                key, ctr = params[0], params[1] 
-                format = len(params) == 3 and params[2]
-                args = [start]
-                if format:
-                    if hasattr(format, '__call__'):
-                        format = format()
-                    args.append(format)
-                    
-                self.__dict__[key] = ctr(*args)
-                self.__dict__[key].unpack_from(self.buf)
-                #next field starting point
-                start = field.end
+            self._set_values((p for p in self.seq))
                 
     def set_values(self, **kwargs):
-        start = 0
-        for params in self.seq:
-            if params[0] in kwargs:
-                key, ctr = params[0], params[1]
-                format = len(params) == 3 and params[2]
-                args = [start]
-                if format:
-                    if hasattr(format, '__call__'): 
-                        format = format()
-                    args.append(format)
-                    
-                self.__dict__[key] = ctr(*args)
-                self.__dict__[key].value = kwargs[key]
-                #next field starting point
-                start = self.__dict__[key].end
+        items = (p for p in self.seq if p[0] in kwargs)
+        self._set_values(items, False, kwargs)
                 
-    def _set_values(self, items_dict, use_buf=0):
-        for params in items_dict:
+    def _set_values(self, items, use_buf=True, values_dict=None):
+        start = 0
+        for params in items:
             key, ctr = params[0], params[1]
             format = len(params) == 3 and params[2]
             args = [start]
@@ -270,13 +245,15 @@ class BaseMessage(object):
                 args.append(format)
                 
             self.__dict__[key] = ctr(*args)
+            
             if use_buf:
                 self.__dict__[key].unpack_from(self.buf)
             else:
-                self.__dict__[key].value = items_dict[key]
+                self.__dict__[key].value = values_dict[key]
+            
             #next field starting point
             start = self.__dict__[key].end
-
+            
     def serialize(self):
         self._init_buffer()
         for params in self.seq:
