@@ -73,12 +73,6 @@ __all__ = ['BaseMessage', 'ByteField', 'ChangeStatus', 'CharField', 'ClientAnswe
     'ServerHangupRequestAck', 'ServerOverloaded', 'ServerRTPRelay', 
     'ServerRejectInvite', 'ShortField', 'ShortResponse', 'StringField', 'UUIDField']
     
-    #~ ['CommMessage', 'Field', 'ByteField', 'CharField', 'ShortField', 'IntField', 
-    #~ 'StringField', 'IPField', 'BaseMessage', 'LoginRequest', 'LoginReply', 
-    #~ 'ServerOverloaded', 'Logout', 'KeepAlive', 'KeepAliveAck', 'ClientInvite', 
-    #~ 'ServerRejectInvite', 'ServerForwardInvite', 'ClientAckInvite', 
-    #~ 'ServerForwardRing', 'SyncAddressBook', 'ShortResponse']
-    
 import struct, uuid
 from ctypes import create_string_buffer
 from md5 import new as md5
