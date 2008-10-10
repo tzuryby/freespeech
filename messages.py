@@ -204,10 +204,9 @@ class BaseMessage(object):
         elif 'length' in kwargs:
             self.buf = create_string_buffer(kwargs['length'])   
             
-    def _init_buffer(self, newbuffer=None):
-        
+    def _init_buffer(self, newbuffer=None):        
         if not self.buf and not newbuffer:
-            length = sum((self.dict[field[0]].length for field in self.seq))
+            length = sum((self.__dict__[field[0]].length for field in self.seq))
             self.buf = create_string_buffer(length)
             
         elif newbuffer:
@@ -222,40 +221,34 @@ class BaseMessage(object):
             # convert string into writeable-buffer
             elif isinstance(newbuffer,str):
                 self.buf.raw = newbuffer
-                
-        #~ elif not self.buf:
-            #~ length = sum((self.__dict__[p[0]].length for p in self.seq))
-            #~ self.buf = create_string_buffer(length)
             
     def deserialize(self, buf=None):
         if buf:
             self._init_buffer(buf)
             
         if self.buf:
+            start = 0
             for params in self.seq:
-                key, ctr, start = params[0], params[1] , params[2]
-                format = len(params) == 4 and params[3] or None
-                # in case of starting point is a callable
-                if hasattr(start, '__call__'):
-                    start = start()
-                # in case of format is a callable
+                key, ctr = params[0], params[1] 
+                format = len(params) == 3 and params[2]
+                args = [start]
                 if format:
                     if hasattr(format, '__call__'):
                         format = format()
-                    self.__dict__[key] = ctr(start, format)
-                else:
-                    self.__dict__[key] = ctr(start)
+                    args.append(format)
                     
+                self.__dict__[key] = ctr(*args)
                 self.__dict__[key].unpack_from(self.buf)
+                #next field starting point
+                start = field.end
                 
     def set_values(self, **kwargs):
+        start = 0
         for params in self.seq:
             if params[0] in kwargs:
-                key, ctr, start, format = params[0], params[1] , params[2], None                
-                start = hasattr(start, '__call__') and start() or start
+                key, ctr = params[0], params[1]
+                format = len(params) == 3 and params[2]
                 args = [start]
-                if len(params) == 4:
-                    format = params[3]
                 if format:
                     if hasattr(format, '__call__'): 
                         format = format()
@@ -263,7 +256,27 @@ class BaseMessage(object):
                     
                 self.__dict__[key] = ctr(*args)
                 self.__dict__[key].value = kwargs[key]
-        
+                #next field starting point
+                start = self.__dict__[key].end
+                
+    def _set_values(self, items_dict, use_buf=0):
+        for params in items_dict:
+            key, ctr = params[0], params[1]
+            format = len(params) == 3 and params[2]
+            args = [start]
+            if format:
+                if hasattr(format, '__call__'): 
+                    format = format()
+                args.append(format)
+                
+            self.__dict__[key] = ctr(*args)
+            if use_buf:
+                self.__dict__[key].unpack_from(self.buf)
+            else:
+                self.__dict__[key].value = items_dict[key]
+            #next field starting point
+            start = self.__dict__[key].end
+
     def serialize(self):
         self._init_buffer()
         for params in self.seq:
@@ -274,98 +287,98 @@ class BaseMessage(object):
 class LoginRequest(BaseMessage):    
     def __init__(self, *args, **kwargs):
         seq = [
-            ('username_length', ByteField, 0), 
-            ('username', StringField, 1, lambda: '!%dc' % self.username_length.value ), 
-            ('password', StringField, lambda: self.username.end, '!20c'), 
-            ('local_ip', IPField, lambda: self.password.end), 
-            ('local_port', IntField, lambda: self.local_ip.end)]
+            ('username_length', ByteField), 
+            ('username', StringField, lambda: '!%dc' % self.username_length.value ), 
+            ('password', StringField, '!20c'), 
+            ('local_ip', IPField), 
+            ('local_port', IntField)]
             
         BaseMessage.__init__(self, seq, *args, **kwargs)
 
 class LoginReply(BaseMessage):
     def __init__(self, *args, **kwargs):
         seq = [
-            ('client_ctx', UUIDField, 0),
-            ('client_public_ip', IPField, 16), 
-            ('client_public_port', IntField, lambda: self.client_public_ip.end),
-            ('ctx_expire', IntField, lambda: self.client_public_port.end),
-            ('num_of_codecs', ByteField, lambda: self.ctx_expire.end),
-            ('codec_list', StringField, lambda: self.num_of_codecs.end, lambda: '!%dc' % self.num_of_codecs.value)]
+            ('client_ctx', UUIDField), 
+            ('client_public_ip', IPField),
+            ('client_public_port', IntField),
+            ('ctx_expire', IntField), 
+            ('num_of_codecs', ByteField), 
+            ('codec_list', StringField, lambda: '!%dc' % self.num_of_codecs.value)] 
             
         BaseMessage.__init__(self, seq, *args, **kwargs)
 
 class ServerOverloaded(BaseMessage):
     def __init__(self, *args, **kwargs):
-        seq = [('alternate_ip', IPField, 0)]
+        seq = [('alternate_ip', IPField)]
         
         BaseMessage.__init__(self, seq, *args, **kwargs)
 
 class Logout(BaseMessage):
     def __init__(self, *args, **kwargs):
-        seq = [('client_ctx', UUIDField, 0)]
+        seq = [('client_ctx', UUIDField)]
         
         BaseMessage.__init__(self, seq, *args, **kwargs)
     
 class KeepAlive(BaseMessage):
     def __init__(self, *args, **kwargs):
         seq = [
-            ('client_ctx', UUIDField, 0),
-            ('client_public_ip', IPField, 16), 
-            ('client_public_port', IntField, lambda: self.client_public_ip.end)]
+            ('client_ctx', UUIDField),
+            ('client_public_ip', IPField), 
+            ('client_public_port', IntField)]
         
         BaseMessage.__init__(self, seq, *args, **kwargs)
 
 class KeepAliveAck(BaseMessage):
     def __init__(self, *args, **kwargs):
         seq = [
-            ('client_ctx', UUIDField, 0),
-            ('expire', IntField, 16),
-            ('refresh_contact_list', ByteField, lambda: self.expire.end)]
+            ('client_ctx', UUIDField),
+            ('expire', IntField),
+            ('refresh_contact_list', ByteField)]
         
         BaseMessage.__init__(self, seq, *args, **kwargs)
         
 class ClientInvite(BaseMessage):
     def __init__(self, *args, **kwargs):
         seq = [
-            ('client_ctx', UUIDField, 0),
-            ('other_name_length', ByteField, 16),
-            ('other_name', StringField, 17, lambda: '!%dc' % self.other_name_length.value),
-            ('num_of_codecs', ByteField, lambda: self.other_name.end),
-            ('codec_list', StringField, lambda: self.num_of_codecs.end, lambda: '!%dc' % self.num_of_codecs.value)]
+            ('client_ctx', UUIDField),
+            ('other_name_length', ByteField),
+            ('other_name', StringField, lambda: '!%dc' % self.other_name_length.value),
+            ('num_of_codecs', ByteField),
+            ('codec_list', StringField, lambda: '!%dc' % self.num_of_codecs.value)]
         
         BaseMessage.__init__(self, seq, *args, **kwargs) 
         
 class ServerRejectInvite(BaseMessage):
     def __init__(self, *args, **kwargs):
         seq = [
-            ('client_ctx', UUIDField, 0),
-            ('error_code', ShortField, 16)]
+            ('client_ctx', UUIDField),
+            ('error_code', ShortField)]
         
         BaseMessage.__init__(self, seq, *args, **kwargs)
 
 class ServerForwardInvite(BaseMessage):
     def __init__(self, *args, **kwargs):
         seq = [
-            ('client_ctx', UUIDField, 0),
-            ('call_ctx', UUIDField, lambda: self.client_ctx.end),
-            ('call_type', ByteField, lambda: self.call_ctx.end),
-            ('client_name_length', ByteField, lambda: self.call_type.end),
-            ('client_name', StringField, lambda: self.client_name_length.end, lambda: '!%dc' % self.client_name_length.value),
-            ('client_public_ip', IPField, lambda: self.client_name.end), 
-            ('client_public_port', IntField, lambda: self.client_public_ip.end),
-            ('num_of_codecs', ByteField, lambda: self.client_public_port.end),
-            ('codec_list', StringField, lambda: self.num_of_codecs.end, lambda: '!%dc' % self.num_of_codecs.value)]
+            ('client_ctx', UUIDField),
+            ('call_ctx', UUIDField),
+            ('call_type', ByteField),
+            ('client_name_length', ByteField),
+            ('client_name', StringField, lambda: '!%dc' % self.client_name_length.value),
+            ('client_public_ip', IPField), 
+            ('client_public_port', IntField),
+            ('num_of_codecs', ByteField),
+            ('codec_list', StringField, lambda: '!%dc' % self.num_of_codecs.value)]
         
         BaseMessage.__init__(self, seq, *args, **kwargs) 
         
 class ClientInviteAck(BaseMessage):
     def __init__(self, *args, **kwargs):
         seq = [
-            ('client_ctx', UUIDField, 0),
-            ('call_ctx', UUIDField, lambda: self.client_ctx.end),
-            ('client_status', ByteField, lambda: self.call_ctx.end),
-            ('client_public_ip', IPField, lambda: self.client_status.end), 
-            ('client_public_port', IntField, lambda: self.client_public_ip.end)]
+            ('client_ctx', UUIDField),
+            ('call_ctx', UUIDField),
+            ('client_status', ByteField),
+            ('client_public_ip', IPField), 
+            ('client_public_port', IntField)]
         
         BaseMessage.__init__(self, seq, *args, **kwargs)
 
@@ -375,9 +388,9 @@ class ServerForwardRing(ClientInviteAck):
 class ClientAnswer(BaseMessage):
     def __init__(self, *args, **kwargs):
         seq = [
-            ('client_ctx', UUIDField, 0),
-            ('call_ctx', UUIDField, lambda: self.client_ctx.end),
-            ('codec', ByteField, lambda: self.call_ctx.end)]
+            ('client_ctx', UUIDField),
+            ('call_ctx', UUIDField),
+            ('codec', ByteField)]
         
         BaseMessage.__init__(self, seq, *args, **kwargs)
         
@@ -387,9 +400,9 @@ class ServerForwardAnswer(ClientAnswer):
 class ClientRTP(BaseMessage):
     def __init__(self, *args, **kwargs):
         seq = [
-            ('client_ctx', UUIDField, 0),
-            ('call_ctx', UUIDField, lambda: self.client_ctx.end),
-            ('rtp_bytes', StringField, lambda: self.call_ctx.end, 1024*4)]
+            ('client_ctx', UUIDField),
+            ('call_ctx', UUIDField),
+            ('rtp_bytes', StringField, '!%db' % 1024*4)]
         
         BaseMessage.__init__(self, seq, *args, **kwargs)
         
@@ -399,8 +412,8 @@ class ServerRTPRelay(ClientRTP):
 class Hangup(BaseMessage):
     def __init__(self, *args, **kwargs):
         seq = [
-            ('client_ctx', UUIDField, 0),
-            ('call_ctx', UUIDField, lambda: self.client_ctx.end)]
+            ('client_ctx', UUIDField),
+            ('call_ctx', UUIDField)]
             
         BaseMessage.__init__(self, seq, *args, **kwargs)
             
@@ -419,16 +432,16 @@ class ServerHangupRequestAck(Hangup):
 class ChangeStatus(BaseMessage):
     def __init__(self, *args, **kwargs):
         seq = [
-            ('client_ctx', UUIDField, 0),
-            ('status', ByteField, lambda: self.client_ctx.end)]
+            ('client_ctx', UUIDField),
+            ('status', ByteField)]
         
         BaseMessage.__init__(self, seq, *args, **kwargs)
         
 class ShortResponse(BaseMessage):
     def __init__(self, *args, **kwargs):
         seq = [
-            ('client_ctx', UUIDField, 0),
-            ('result', ShortField, 16)]
+            ('client_ctx', UUIDField),
+            ('result', ShortField)]
         BaseMessage.__init__(self, seq, *args, **kwargs)
         
         

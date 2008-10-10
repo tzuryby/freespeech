@@ -48,12 +48,11 @@ MessageTypes = dict({
     '\x00\x04': KeepAlive,
     '\x00\x05': KeepAliveAck,
     '\x00\x06': ClientInvite,
-    '\x00\x07': ClientAckInvite,
+    '\x00\x07': ClientInviteAck,
     '\x00\x08': ServerForwardInvite,
     '\x00\x09': ServerRejectInvite,
     '\x00\x0a': ServerForwardRing,
-    '\x00\x0b': SyncAddressBook,
-    '\x00\x0c': ServerOverloaded
+    '\x00\x0b': ServerOverloaded
 })
 
 MessageFactory = Storage(
