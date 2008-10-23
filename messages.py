@@ -266,6 +266,14 @@ class BaseMessage(object):
             self.__dict__[params[0]].pack_into(self.buf)
             
         return self.buf
+
+        
+class ShortResponse(BaseMessage):
+    def __init__(self, *args, **kwargs):
+        self.seq = [
+            ('client_ctx', UUIDField),
+            ('result', ShortField)]
+        BaseMessage.__init__(self, *args, **kwargs)
         
 class LoginRequest(BaseMessage):    
     def __init__(self, *args, **kwargs):
@@ -319,27 +327,30 @@ class KeepAliveAck(BaseMessage):
             ('refresh_contact_list', ByteField)]
         
         BaseMessage.__init__(self, *args, **kwargs)
-        
-class ClientInvite(BaseMessage):
+
+class SignalingMessage(BaseMessage):
+    pass
+    
+class ClientInvite(SignalingMessage):
     def __init__(self, *args, **kwargs):
         self.seq = [
             ('client_ctx', UUIDField),
-            ('other_name_length', ByteField),
-            ('other_name', StringField, lambda: '!%dc' % self.other_name_length.value),
+            ('calle_name_length', ByteField),
+            ('calle_name', StringField, lambda: '!%dc' % self.other_name_length.value),
             ('num_of_codecs', ByteField),
             ('codec_list', StringField, lambda: '!%dc' % self.num_of_codecs.value)]
         
         BaseMessage.__init__(self, *args, **kwargs)
         
-class ServerRejectInvite(BaseMessage):
+class ServerRejectInvite(ShortResponse):
     def __init__(self, *args, **kwargs):
-        self.seq = [
-            ('client_ctx', UUIDField),
-            ('error_code', ShortField)]
-        
         BaseMessage.__init__(self, *args, **kwargs)
+        if ('client_ctx' in kwargs or 'reason' in kwargs) and 'buf' not in kwargs:
+            self.set_values(client_ctx = kwargs['client_ctx'], reason = kwargs['reason'])
+        else:
+            raise 'Incorrect parameters'
 
-class ServerForwardInvite(BaseMessage):
+class ServerForwardInvite(SignalingMessage):
     def __init__(self, *args, **kwargs):
         self.seq = [
             ('client_ctx', UUIDField),
@@ -354,7 +365,7 @@ class ServerForwardInvite(BaseMessage):
             
         BaseMessage.__init__(self, *args, **kwargs)
         
-class ClientInviteAck(BaseMessage):
+class ClientInviteAck(SignalingMessage):
     def __init__(self, *args, **kwargs):
         self.seq = [
             ('client_ctx', UUIDField),
@@ -368,7 +379,7 @@ class ClientInviteAck(BaseMessage):
 class ServerForwardRing(ClientInviteAck):
     pass
     
-class ClientAnswer(BaseMessage):
+class ClientAnswer(SignalingMessage):
     def __init__(self, *args, **kwargs):
         self.seq = [
             ('client_ctx', UUIDField),
@@ -377,7 +388,7 @@ class ClientAnswer(BaseMessage):
             
         BaseMessage.__init__(self, *args, **kwargs)
         
-class ServerForwardAnswer(ClientAnswer):
+class ServerForwardAnswer(SignalingMessage):
     pass
     
 class ClientRTP(BaseMessage):
@@ -392,7 +403,7 @@ class ClientRTP(BaseMessage):
 class ServerRTPRelay(ClientRTP):
     pass
     
-class Hangup(BaseMessage):
+class Hangup(SignalingMessage):
     def __init__(self, *args, **kwargs):
         self.seq = [
             ('client_ctx', UUIDField),
@@ -419,13 +430,7 @@ class ChangeStatus(BaseMessage):
             ('status', ByteField)]
         
         BaseMessage.__init__(self, *args, **kwargs)
-        
-class ShortResponse(BaseMessage):
-    def __init__(self, *args, **kwargs):
-        self.seq = [
-            ('client_ctx', UUIDField),
-            ('result', ShortField)]
-        BaseMessage.__init__(self, *args, **kwargs)
+
         
 if __name__ == '__main__':
     ka =KeepAliveAck()
