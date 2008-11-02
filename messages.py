@@ -71,12 +71,14 @@ __all__ = ['BaseMessage', 'ByteField', 'ChangeStatus', 'CharField', 'ClientAnswe
     'KeepAliveAck', 'LoginReply', 'LoginRequest', 'Logout', 'ServerForwardAnswer', 
     'ServerForwardHangupRequest', 'ServerForwardInvite', 'ServerForwardRing', 
     'ServerHangupRequestAck', 'ServerOverloaded', 'ServerRTPRelay', 
-    'ServerRejectInvite', 'ShortField', 'ShortResponse', 'StringField', 'UUIDField']
+    'ServerRejectInvite', 'ShortField', 'ShortResponse', 'StringField', 
+    'UUIDField', 'MessageTypes']
     
 import struct, uuid
 from ctypes import create_string_buffer
 from md5 import new as md5
 from decorator import printargs
+
 
 
 class CommMessage(object):
@@ -94,9 +96,9 @@ class CommMessage(object):
         if (hasattr(self.msg, 'client_ctx')):
             self.client_ctx = self.msg.client_ctx
         elif isinstance(self.msg, (LoginRequest,)):
-            self.client_ctx = md5(str(self.msg.username)).digest()
+            self.client_ctx = md5(self.msg.username.value).digest()
             
-        self.call_ctx = hasattr(self.msg, 'call_ctx') and self.call_ctx
+        self.call_ctx = hasattr(self.msg, 'call_ctx') and self.msg.call_ctx
         
     def __repr__(self):
         return 'from %s <%s>, type %s, msg %s' % (self.addr, self.client_ctx, self.msg_type, self.body)
@@ -127,13 +129,14 @@ class Field(object):
     def __getattr__(self, k):
         '''for single value return tuple[0], otherwise, return the tuple'''
         if k == 'value':
+            print '__getattr__:', self._value
             return len(self._value) == 1 and self._value[0] or self._value
         else:
             raise AttributeError
             
     def __repr__(self):
         '''string representation of the tuple'''
-        return str(self._value)
+        return self._value
         
 class ByteField(Field):
     '''single byte numeric field'''
@@ -172,7 +175,7 @@ class StringField(Field):
             
     def __getattr__(self, k):
         if k == 'value':
-            return (c for c in self._value)
+            return self._value[0:] #(c for c in self._value)
         else:
             raise AttributeError
             
@@ -208,17 +211,17 @@ class BaseMessage(object):
             self.deserialize()
             
         elif 'length' in kwargs:
-            self.buf = create_string_buffer(kwargs['length'])   
+            self.buf = create_string_buffer(kwargs['length'])
             
     def _init_buffer(self, newbuffer=None):        
         if not self.buf and not newbuffer:
             length = sum((self.__dict__[field[0]].length for field in self.seq))
-            self.buf = create_string_buffer(length)
+            self.buf = self._create_buffer(length)
             
         elif newbuffer:
             # self.buf never initiated
             if not self.buf:
-                self.buf = create_string_buffer(len(newbuffer))
+                self.buf = self._create_buffer(len(newbuffer))
                 
             # assign or copy the value into self.buf
             if hasattr(newbuffer, 'raw'):
@@ -228,12 +231,15 @@ class BaseMessage(object):
             elif isinstance(newbuffer,str):
                 self.buf.raw = newbuffer
             
-    def deserialize(self, buf=None):
-        if buf: 
-            self._init_buffer(buf)
+    def _create_buffer(self, length=0):
+        '''alocates a writeable buffer'''
+        return create_string_buffer(length)
         
-        if self.buf: 
-            self._set_values(self.seq)
+    def deserialize(self, buf=None):
+        if buf:
+            self._init_buffer(buf)
+            
+        self._set_values(self.seq)        
         
     def set_values(self, **kwargs):
         items = (p for p in self.seq if p[0] in kwargs)
@@ -260,13 +266,33 @@ class BaseMessage(object):
             #next field starting point
             start = self.__dict__[key].end
             
-    def serialize(self):
+    def get_buffer(self):
+        '''returns a writeable buffer which contains the values of the object
+        call buf.raw in order to get the bytes represented as string
+        '''
         self._init_buffer()
         for params in self.seq:
             self.__dict__[params[0]].pack_into(self.buf)
-            
+        
         return self.buf
-
+        
+    def serialize(self):
+        '''returns a writeable buffer which contains the values of the object
+        call buf.raw in order to get the bytes represented as string
+        '''
+        self._init_buffer()
+        for params in self.seq:
+            self.__dict__[params[0]].pack_into(self.buf)
+        
+        return self.buf
+        
+    def frame_buffer(self, buf):
+        if hasattr(buf, 'raw'):
+            buf = buf.raw
+        length = struct.pack('!h', len(buf))
+        ret = ''.join(['\xab\xcd', self.type_code, length, buf, '\xdc\xba'])
+        print 'serializing:', repr(ret)
+        return ret
         
 class ShortResponse(BaseMessage):
     def __init__(self, *args, **kwargs):
@@ -284,6 +310,7 @@ class LoginRequest(BaseMessage):
             ('local_ip', IPField), 
             ('local_port', IntField)]
             
+        self.type_code = '\x00\x01'
         BaseMessage.__init__(self, *args, **kwargs)
         
 class LoginReply(BaseMessage):
@@ -296,6 +323,7 @@ class LoginReply(BaseMessage):
             ('num_of_codecs', ByteField),
             ('codec_list', StringField, lambda: '!%dc' % self.num_of_codecs.value)]
             
+        self.type_code = '\x00\x02'
         BaseMessage.__init__(self, *args, **kwargs)
 
 class ServerOverloaded(BaseMessage):
@@ -336,10 +364,11 @@ class ClientInvite(SignalingMessage):
         self.seq = [
             ('client_ctx', UUIDField),
             ('calle_name_length', ByteField),
-            ('calle_name', StringField, lambda: '!%dc' % self.other_name_length.value),
+            ('calle_name', StringField, lambda: '!%dc' % self.calle_name_length.value),
             ('num_of_codecs', ByteField),
             ('codec_list', StringField, lambda: '!%dc' % self.num_of_codecs.value)]
-        
+            
+        self.type_code = '\x00\x06'    
         BaseMessage.__init__(self, *args, **kwargs)
         
 class ServerRejectInvite(ShortResponse):
@@ -373,7 +402,7 @@ class ClientInviteAck(SignalingMessage):
             ('client_status', ByteField),
             ('client_public_ip', IPField),
             ('client_public_port', IntField)]
-            
+        
         BaseMessage.__init__(self, *args, **kwargs)
         
 class ServerForwardRing(ClientInviteAck):
@@ -430,13 +459,30 @@ class ChangeStatus(BaseMessage):
             ('status', ByteField)]
         
         BaseMessage.__init__(self, *args, **kwargs)
+        
+MessageTypes = dict({
+    '\x00\x01': LoginRequest,
+    '\x00\x02': LoginReply,
+    '\x00\x03': Logout,
+    '\x00\x04': KeepAlive,
+    '\x00\x05': KeepAliveAck,
+    '\x00\x06': ClientInvite,
+    '\x00\x07': ClientInviteAck,
+    '\x00\x08': ServerForwardInvite,
+    '\x00\x09': ServerRejectInvite,
+    '\x00\x0a': ServerForwardRing,
+    '\x00\x0b': ServerOverloaded
+})
+
 
         
 if __name__ == '__main__':
     ka =KeepAliveAck()
     buf = uuid.uuid4().bytes
     buf += '\x01\x01\x01\x01'
-    ka.deserialize(buf)
-    print ''.join(ka.client_ctx.value)
+    ka.deserialize('\xab\xcd\x00\x01\x00\x14' + buf + '\xdc\xba')
+    x = ka.serialize()
+    print repr(x.raw)
+    print repr(''.join(ka.client_ctx.value))
     print ka.expire.value
     

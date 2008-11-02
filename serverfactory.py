@@ -84,7 +84,7 @@ class StreamServer(BaseRequestHandler):
         while data and self.run:
             data = self.request.recv(4*1024)
             if data and self.handler:
-                print 'received:', self.client_address, data
+                print 'server received:', self.client_address, data
                 self.handler(self.client_address, data)
     
     def send(self, msg):
@@ -111,7 +111,7 @@ class DatagramServer(object):
             while self.run:
                 data, addr = self.socket.recvfrom(4*1024)
                 if data:
-                    print 'received:', self.client_address, data
+                    print 'server received:', self.client_address, data
                     if self.register:
                         self.register(addr, self, 'udp', self.id)
                     if self.handler:

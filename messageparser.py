@@ -34,26 +34,13 @@ class Packer(object)
 __author__ = 'Tzury Bar Yochay'
 __version__ = '0.1'
 __license__ = 'GPLv3'
-__all__ = ['MessageFactory', 'Parser', 'Packer', 'MessageTypes']
+__all__ = ['MessageFactory', 'Parser', 'Packer']
 
 import struct
 from ctypes import create_string_buffer
 from utils import Storage
 from messages import *
 
-MessageTypes = dict({
-    '\x00\x01': LoginRequest,
-    '\x00\x02': LoginReply,
-    '\x00\x03': Logout,
-    '\x00\x04': KeepAlive,
-    '\x00\x05': KeepAliveAck,
-    '\x00\x06': ClientInvite,
-    '\x00\x07': ClientInviteAck,
-    '\x00\x08': ServerForwardInvite,
-    '\x00\x09': ServerRejectInvite,
-    '\x00\x0a': ServerForwardRing,
-    '\x00\x0b': ServerOverloaded
-})
 
 MessageFactory = Storage(
     create= lambda msg_type, buf: msg_type in MessageTypes and MessageTypes[msg_type](buf=buf) or None )
@@ -115,12 +102,17 @@ class Packer(object):
                 if msg_type in MessageTypes:
                     msg_type = MessageTypes[msg_type]
                     cm = CommMessage(client, msg_type, buf)
+                    print 'packer put in queue', cm
                     self.queue.put(cm)
                 else:
                     print 'Unknown message type: %s', message_type 
                     
+            else:
+                print 'packer.pack: not a valid message', msg
             del self.clients[client]
-        
+        else:
+            print 'eof not found, waiting for more bytes'
+            
     # receives the message and store it in the clients[client]
     def _recv(self, client, msg):
         # new client or new message
@@ -129,3 +121,4 @@ class Packer(object):
         else:
             self.clients[client] = self.clients[client] + msg
             
+        print 'packer queue:', client, self.clients[client]
