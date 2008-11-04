@@ -79,12 +79,12 @@ if __name__ == "__main__":
     lr.local_port.value = 50009
     lr.local_ip.value = (127, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
     lr.password.value = ''.join(reversed(list(lr.password.value)))
-    lr.deserialize(lr.serialize().raw)
+    lr.deserialize(lr.get_buffer().raw)
     
     print ('='*80)
     for i in lr.seq:
         print i[0], '\t', lr.__dict__[i[0]]
     
-    print lr.serialize().raw
+    print lr.get_buffer().raw
     print buf
-    assert (not lr.serialize().raw == buf)
+    assert (not lr.get_buffer().raw == buf)

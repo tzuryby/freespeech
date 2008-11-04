@@ -1,5 +1,6 @@
 import serverfactory
-
+#~ import time 
+#~ from threading import Thread
 
 clients = {}
 
@@ -20,5 +21,13 @@ def main():
     serverfactory.serve('udp', 'localhost', 50009, handler, register)
 
 
+#~ def send_test():
+    #~ while True:
+        #~ for addr in clients:
+            #~ clients[addr][0].send('your addr is:' + str(addr))
+            
+        #~ time.sleep(10)
+        
 if __name__ == '__main__':
     main()
+    #Thread(target = send_test).start()

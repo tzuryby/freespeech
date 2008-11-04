@@ -26,7 +26,6 @@ class Packer(object)
         expect an instanse of Queue.Queue() or any other object that has 'put' 
         method
         
-        
 # Copyrights (c) - 2008
 
 '''
@@ -92,7 +91,7 @@ class Packer(object):
         self.parser = Parser()
         
     def pack(self, client, msg):
-        print 'packing', msg
+        print 'packing:', msg
         self._recv(client, msg)
         if self.parser.eof(msg):
             # get the whole message
