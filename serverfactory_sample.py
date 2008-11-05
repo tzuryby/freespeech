@@ -20,13 +20,6 @@ def main():
     serverfactory.serve('tcp', 'localhost', 50009, handler, register)
     serverfactory.serve('udp', 'localhost', 50009, handler, register)
 
-
-#~ def send_test():
-    #~ while True:
-        #~ for addr in clients:
-            #~ clients[addr][0].send('your addr is:' + str(addr))
-            
-        #~ time.sleep(10)
         
 if __name__ == '__main__':
     main()

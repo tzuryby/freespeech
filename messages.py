@@ -77,7 +77,7 @@ __all__ = ['BaseMessage', 'ByteField', 'ChangeStatus', 'CharField', 'ClientAnswe
 import struct, uuid
 from ctypes import create_string_buffer
 from md5 import new as md5
-from decorator import printargs
+from decorators import printargs
 
 
 def string_to_ctx(*args):

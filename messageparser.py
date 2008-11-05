@@ -101,7 +101,6 @@ class Packer(object):
                 if msg_type in MessageTypes:
                     msg_type = MessageTypes[msg_type]
                     cm = CommMessage(client, msg_type, buf)
-                    print 'packer put in queue', cm
                     self.queue.put(cm)
                 else:
                     print 'Unknown message type: %s', message_type 

@@ -8,7 +8,13 @@ from messageparser import Packer, Parser
 from threading import Thread
 from messages import *
 from config import Codecs
-from decorator import printargs
+from decorators import printargs
+
+
+from twisted.internet import reactor
+from twisted.internet.protocol import Protocol, ClientCreator
+from sys import stdout
+
 
 class TcpClient(Thread):
     def __init__(self, host, port):
@@ -20,7 +26,7 @@ class TcpClient(Thread):
         print 'connected!'
 
     def send(self, msg):
-        print 'sending:', msg
+        print 'TcpClient.send:', msg
         self.socket.send(msg)
                         
     def run(self):
@@ -68,11 +74,10 @@ def create_invite(ctx, username):
         
 @printargs
 def network_login(username, password):
-    login = create_login_msg(username, password)
+    login = create_login_msg(username, password)    
     client = TcpClient('localhost', 50009)
     client.start()
     time.sleep(0.5)
-    print 'sending:', login
     client.send(login)
     
 @printargs
