@@ -6,7 +6,10 @@ import session
 
 
 def run_all():
-    threads = [session.handle_requests, session.handle_replies, session.remove_old_clients]
+    threads = [session.handle_inbound_queue, 
+        session.handle_outbound_queue, 
+        session.remove_old_clients]
+        
     for thread in threads:
         Thread(target = thread).start()
         

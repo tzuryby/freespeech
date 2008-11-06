@@ -7,7 +7,7 @@ import time, Queue, struct
 import dblayer, messages, config
 
 from md5 import new as md5
-from messageparser import *
+from messageparser import Packer
 from messages import *
 from utils import Storage
 from config import *
@@ -31,14 +31,19 @@ class ServersPool(Storage):
         self[id] = Storage(proto = proto, server=server)
         
 '''
+    request - reply life cycle:
+        recv_msg -> packer -> inbound_queue - > handle_inbound_queue ->
+        _filter -> [switch-parsing/handling] -> outbound_queue ->
+        handle_outbound_queue -> reactor.callFromThread
+        
     the first time a client is connected:
         it sends a login-request
         if a login request succeed as a result the system creates client_ctx
         this context id is registered at the ctx_table along with the client's address
-        at every message the system saves the last addr in order to reply to it.
+        ** at every message the system saves the last addr in order to reply to it.
             (in udp it mihgt changed during active session)
-        every keep-alive the system stamps the client
-        when a client sends invote to another client
+        ** every keep-alive the system stamps the client
+        ** when a client sends invite to another client
             the caller's call_ctx is stamped by a new call_ctx
             when the calle answer the calle is stampped by the same data.
             
@@ -57,19 +62,25 @@ class CtxTable(Storage):
             self[client_ctx].call_ctx = call_ctx
             
     def clients_ctx(self):
-        '''all active clients'''
+        '''all active clients (the keys)'''
         return self.keys() #(ctx for ctx in self)
             
     def clients(self):
-        return self.values() #(self[ctx] for ctx in self)
+        '''all active clients (the values)'''
+        return self.values()
             
-    def touch_client(self, client_ctx):
-        if client_ctx in self:
-            self[client_ctx].last_keep_alive = time.time()
+    def calls_ctx(self):
+        '''all active calls (the keys)'''
+        return (self[ctx].call_ctx.ctx_id for ctx in self if self[ctx].call_ctx)
             
     def calls(self):
-        '''all active calls'''
+        '''all active calls the values'''
         return (self[ctx].call_ctx for ctx in self if self[ctx].call_ctx)
+            
+    def get_call_ctx(self, call_ctx):
+        for i in self.calls():
+            if i.ctx_id == call_ctx:
+                return i
             
     def get_addr(self, client_ctx):
         '''return the last ip address registered for this client'''
@@ -95,30 +106,10 @@ class CtxTable(Storage):
         '''all connected clients user names and their status (name, status)'''
         return ((self[ctx].client_name, self[ctx].status) for ctx in self)
             
-#
-ctx_table = CtxTable()
 
-#
-servers_pool = ServersPool()
-
-# Packer.pack will pack each request into this queue
-inbound_messages = Queue.Queue()
-
-# replies from server to client
-outbound_messages = Queue.Queue()
-
-# packs any incoming message and put it in the inbound_messages queue
-msg_packer = Packer(inbound_messages)
-msg_parser = Parser()
-users = dblayer.Users
-
-#~ def map_socket(addr, socket, proto, socket_id):
-    #~ ''' callback for 'register' trigger at the server
-    #~ map a client to a socekt at one of the available listeners'''
-    #~ sockets_map[addr] = (socket, proto, socket_id)
-    
 def recv_msg(caller, (host, port), msg):
-    ''' callback for 'handler' trigger at the server '''
+    '''every server, onDataReceived call this function with the data'''
+    msg = config.unhexlify(msg)
     msg_packer.pack((host, port), msg)
     
 def create_client_context(comm_msg, status=ClientStatus.Unknown):
@@ -134,9 +125,7 @@ def create_client_context(comm_msg, status=ClientStatus.Unknown):
         ctx = Storage (addr=addr, status=status, expire=now + CLIENT_EXPIRE, 
             last_keep_alive=now, ctx_id = ctx_id, call_ctx = None, 
             client_name = comm_msg.msg.username.value)
-            
         return (ctx_id, ctx)
-        
     else:
         return None
 
@@ -156,166 +145,146 @@ def create_call_ctx(request):
         answer_time = 0,
         end_time = 0,
         codec = None,
-        #proto = sockets_map[request.addr][1],
         ctx_id = ctx_id
     )
-    
     return (ctx_id, ctx)
     
 def remove_old_clients():
     while True:
         now = time.time()
-        expired_clients = [ctx for ctx in ctx_table.keys() if ctx.expire < now]
-        for ctx in expired_clients:
-            print 'removing inactive client', repr(ctx)
-            del ctx_table[ctx]
+        expired_clients = [client.ctx_id for client in ctx_table.clients() if client.expire < now]
+        for ctx_id in expired_clients:
+            print 'removing inactive client', repr(ctx_id)
+            del ctx_table[ctx_id]
         time.sleep(CLIENT_EXPIRE)
 
-def request_queue():
+def inbound_queue():
     while True:
         try:
             yield inbound_messages.get(block=0)
         except Queue.Empty:
             yield None
             
-def replies_queue():
+def outbound_queue():
     while True:
         try:
             yield outbound_messages.get(block=0)
         except Queue.Empty:
             yield None
+            
+'''             funcitonality not implemented                               '''
+KeepAliveSession = SyncAddressBookSession = ChangeStatusSession = None
+'''             end-of funcitonality not implemented                        '''
 
-#review
-def _handle_request(request):
-    switch = {
-        messages.Logout: LogoutSession,
-        messages.KeepAlive: KeepAliveSession,
-        messages.ChangeStatus: ChangeStatusSession
-    }
-    msg_type = request.msg_type
-    msg_type in switch and touch_client(request.client_ctx)
-    if msg_type in switch:
-        switch[msg_type](request.msg)
-    else:
-        call_session.handle(request)
-
-#review
-class LogoutSession(object):
-    def __init__(self, request):
-        pass
-        
-KeepAliveSession = SyncAddressBookSession = \
-    ChangeStatusSession = CallSession = LogoutSession
-
-def handle_requests():
+def handle_inbound_queue():
     while True:
-        for req in request_queue():
+        for req in inbound_queue():
             if req:
                 _filter(req)
-        time.sleep(0.1)
-        
-#review
-def _filter(msg):
-    #msg_type, ctx = msg.msg_type, msg.client_ctx
-    msg_type = msg.msg_type
-    # system will handle only from known clients or login requests
-    if msg_type == LoginRequest:
-        LoginSession(msg)
-        return
-        
-    ctx = hasattr(msg.msg, 'client_ctx') and msg.msg.client_ctx.value
-    if ctx and ctx in ctx_table:
-        _handle_request(msg)
-    else:
-        print 'throwing away unknown message', msg
-        
-#review
-def handle_replies():
-    while True:
-        for rep in replies_queue():
-            if rep:
-                print 'server reply or forward a message to', rep.addr
-                reactor.callFromThread(servers_pool.send_to,rep.addr, rep.msg.serialize())
-        time.sleep(0.1)
                 
-#review
-def touch_client(ctx, time_stamp = time.time(), expire=CLIENT_EXPIRE):
+        time.sleep(0.10)
+        
+def handle_outbound_queue():
+    while True:
+        for rep in outbound_queue():
+            if rep and hasattr(rep, 'msg') and hasattr(rep, 'addr'):
+                print 'server reply or forward a message to', rep.addr
+                try:
+                    data = rep.msg.serialize()
+                    data = config.hexlify(data)
+                    reactor.callFromThread(servers_pool.send_to,rep.addr, data)
+                except:
+                    print 'error while calling reactor.callFromThread at handle_outbound_queue'
+                    
+        time.sleep(0.10)
+        
+def _filter(request):
+    _out = None
+    msg = request.msg
+    msg_type = request.msg_type
+    ctx = hasattr(msg, 'client_ctx') and msg.client_ctx.value    
+    if not ctx and msg_type != LoginRequest:
+        _out = None        
+    else:
+        switch = {
+            messages.LoginRequest: login_handler,
+            messages.Logout: login_handler,
+            messages.KeepAlive: KeepAliveSession,
+            messages.ChangeStatus: ChangeStatusSession,
+        }
+        if msg_type in switch:
+            _out = switch[msg_type](request)
+        elif isinstance(msg, (SignalingMessage, ClientRTP)):
+            _out = call_session_handler(request)
+            
+    if not _out:
+        print 'filter is throwing away unknown message:', repr(msg)
+    else:
+        outbound_messages.put(_out)
+        if ctx:
+            touch_client(request.client_ctx)        
+        
+def touch_client(ctx, time_stamp = time.time(), expire=None):
+    if not expire:
+        expire = time_stamp + CLIENT_EXPIRE
+    
+    print 'touch the glory of', repr(ctx)
+    
     if ctx in ctx_table:
         ctx_table[ctx].last_keep_alive = time_stamp
-        ctx_table[ctx].expire = expire        
+        ctx_table[ctx].expire = expire
 
-#review
-class LoginSession(object):
-    '''Manages the login session
-    LoginRequest -> Verify Login -> Client_CTX Creation -> Login Reply
-    '''
-    def __init__(self, request):
-        print 'initializing login session'
-        if request.msg_type == LoginRequest:
-            self.login_request = request
-            if self.verify_login():
-                self.create_client_ctx()
-                self.reply_login()
-            else:
-                self.deny_login()
-                
-    def verify_login(self):
-        '''match supplied credentials with the database'''
-        username = self.login_request.msg.username
-        password = self.login_request.msg.password        
+def login_handler(request):
+    def verify_login(username, password):
         dbuser = users[unicode(username)]
+        '''match supplied credentials with the database'''
         if dbuser and str(dbuser.password) == str(password):
-            self.dbuser = dbuser
             print 'login succseed'
-            return True
+            return dbuser
         else:
-            return False
+            return None
             
-    def create_client_ctx(self):
-        '''creates new client context and register it'''
-        self.ctx_id, self.ctx_data = create_client_context(
-            self.login_request, status=self.dbuser.login_status)
-            
-        ctx_table.add_client((self.ctx_id, self.ctx_data))
-            
-    def reply_login(self):
+    def login_reply(ctx_id, ctx_data):
         '''creates login reply and put it in the outbound queue'''
         lr = LoginReply()
-        ip, port = self.ctx_data.addr
+        ip, port = ctx_data.addr
         codecs = Codecs.values()
-        lr.set_values(client_ctx=self.ctx_id, 
-            client_public_ip=ip , client_public_port=port, 
-            ctx_expire=ctx_table[self.ctx_id].expire, 
-            num_of_codecs=len(codecs), 
-            codec_list=''.join((c for c in codecs)))
+        lr.set_values(client_ctx=ctx_id, client_public_ip=ip , 
+            client_public_port=port, ctx_expire=ctx_table[ctx_id].expire, 
+            num_of_codecs=len(codecs), codec_list=''.join((c for c in codecs)))
         buf = lr.get_buffer()
         print 'login reply', repr(buf)
-        cm = CommMessage(self.login_request.addr, LoginReply, buf)
-        outbound_messages.put(cm)
+        return CommMessage(request.addr, LoginReply, buf)
         
-    def deny_login(self):
+    def deny_login():
         '''creates login-denied reply and put it in the outbound queue'''
         ld = ShortResponse()
         ld.set_values(
             client_ctx = ('\x00 '*16).split(),
             result = struct.unpack('!h', Errors.LoginFailure))
         buf = ld.get_buffer()
-        cm = CommMessage(self.login_request.addr, ShortResponse, buf)
-        outbound_messages.put(cm)
-        print 'login error'
-
-#review
+        print 'login error'    
+        return CommMessage(request.addr, ShortResponse, buf)
+        
+    username, password = request.msg.username.value, request.msg.password.value
+    dbuser = verify_login(username, password)
+    if dbuser:
+        #creates new client context and register it
+        ctx_id, ctx_data = create_client_context(request, status=dbuser.login_status)    
+        ctx_table.add_client((ctx_id, ctx_data))
+        return login_reply(ctx_id, ctx_data)
+    else:
+        return deny_login(request)
+        
 class CallSession(object):
-    '''Utility class handles all requests/responses regarding a call session
-    _filter should only call 'handle' method
-    '''
+    '''Utility class handles all requests/responses regarding a call session'''
     def handle(self, request):
         if request.msg_type == ClientInvite:
-            self._handle_invite(request)
+            return self._handle_invite(request)
         elif isinstance(request.msg, SignalingMessage):
-            self._handle_signaling(request)
+            return self._handle_signaling(request)
         elif request.msg_type == ServerRTPRelay:
-            self._handle_rtp(request)
+            return self._handle_rtp(request)
             
     def _handle_invite(self, request):
         caller_ctx = request.msg.client_ctx.value
@@ -334,20 +303,17 @@ class CallSession(object):
         print 'matched_codecs:', matched_codecs
         # caller codecs do not match with the server's
         if not matched_codecs:
-            self._reject(config.Errors.CodecMismatch, request)
+            return self._reject(config.Errors.CodecMismatch, request)
         else:
             # create call ctx
-            call_ctx = self._create_call_ctx(request)
+            call_ctx_id, call_ctx = create_call_ctx(request)
             
             # mark the caller as in another call session
-            self._set_client_busy(caller_ctx, call_ctx)
+            ctx_table[caller_ctx].call_ctx = call_ctx
             
             # send ServerForwardInvite to the calle
-            self._forward_invite(call_ctx, matched_codecs)
+            return self._forward_invite(call_ctx, matched_codecs)
             
-    def _create_call_ctx(self, request):
-        call_ctx_id, call_ctx = create_call_ctx(request)
-        return call_ctx
         
     def _forward_invite(self, call_ctx, matched_codecs):
         caller_ctx = call_ctx.caller_ctx
@@ -372,7 +338,7 @@ class CallSession(object):
         sfi_buffer = sfi.get_buffer()
         print 'ServerForwardInvite:', repr(sfi_buffer)
         
-        self._out(ctx_table.get_addr(calle_ctx), ServerForwardInvite, sfi_buffer)
+        return CommMessage(ctx_table.get_addr(calle_ctx), ServerForwardInvite, sfi_buffer)
         
     def _matched_codecs(self, client_codecs):
         '''returns either `0` or a list of matched codecs between the client and the server'''
@@ -382,28 +348,73 @@ class CallSession(object):
         return len(matched_codecs) and matched_codecs
             
     def _handle_signaling(self, request):
-        if _call_in_ctx(request.msg.call_ctx):
-            # use: ClientsCtx.get_addr in order to retrive the `other` client addr
-            pass
+        ctr, msg, call_ctx = None, request.msg, request.call_ctx
+        
+        if call_ctx in ctx_table.calls_ctx():
+            calle_addr = request.addr
+            call_ctx = ctx_table.get_call_ctx(call_ctx)
+            if call_ctx:
+                caller_addr = ctx_table.get_addr(call_ctx.caller_ctx)                
+                if isinstance(msg, ClientInviteAck):                
+                    buf = self._forward_invite_ack(msg)
+                    ctr = ServerForwardRing
+                elif isinstance(msg, ClientAnswer):
+                    buf = self._forward_answer(msg)
+                    ctr = ServerForwardAnswer
+                
+        else:
+            print 'call is out of context:'
+            print repr(call_ctx)
+            print list(ctx_table.calls_ctx())
+            
+        return ctr and CommMessage(caller_addr, ctr, buf)
             
     def _handle_rtp(self, request):
-        if _call_in_ctx(request.msg.call_ctx):
+        if self._call_in_ctx(request.msg.call_ctx):
             # do your duty
             pass
         
-    def _call_in_ctx(self, call_ctx):
-        return call_ctx in calls_ctx
-        
     def _reject(self, reason, request):
         reject = ServerRejectInvite(client_ctx=request.msg.client_ctx, reason=reason)
-        self._out(addr, ServerRejectInvite, reject.get_buffer())
+        return CommMessage(addr, ServerRejectInvite, reject.get_buffer())
         
-    def _out(self, addr, ctr, buf):
-        '''put in the outbound queue a new CommMessage built using the supplied parameters'''
-        cm = CommMessage(addr, ctr, buf)
-        outbound_messages.put(cm)
+    # client_answer_to_server_forward_answer
+    def _forward_answer(self, ca):
+        sfa = ServerForwardAnswer()
+        sfa.set_values(**ca.dict_fields())
+        return sfa.deserialize()
         
-    def _set_client_busy(self, client_ctx, call_ctx):
-        ctx_table[client_ctx].call_ctx = call_ctx
+    # client_invite_ack_to_server_forward_ring
+    def _forward_invite_ack(self, cia, call_type = CallTypes.ViaProxy):
+        sfr = ServerForwardRing()
+        sfr.set_values(
+            client_ctx = cia.client_ctx.value,
+            call_ctx = cia.call_ctx.value,
+            client_status = cia.client_status.value,
+            call_type = call_type,
+            client_public_ip = cia.client_public_ip.value,
+            client_public_port = cia.client_public_port.value)
+        buf = sfr.serialize()
+        print repr('_forward_invite_ack:'), buf
+        return buf
+        
+#########################################
+# all module Singletons
+#########################################
 
-call_session = CallSession()
+ctx_table = CtxTable()
+servers_pool = ServersPool()
+
+# Packer.pack will pack each request into this queue
+inbound_messages = Queue.Queue()
+
+# replies from server to client
+outbound_messages = Queue.Queue()
+
+# packs any incoming message and put it in the inbound_messages queue
+msg_packer = Packer(inbound_messages)
+
+users = dblayer.Users
+    
+#_call_session = CallSession()
+call_session_handler = CallSession().handle

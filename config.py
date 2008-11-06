@@ -30,6 +30,7 @@ ClientStatus = Storage(
     Unknown = '\xff',
     Active = '\x00',
     Busy = '\x01',
+    Ringing = '\x02',
     Away = '\x03'
 )
     
@@ -37,3 +38,10 @@ Listeners = (
     ('udp', 'localhost', 50009),
     ('tcp', 'localhost', 50009),
 )
+
+
+binascii_pipe = False
+
+import binascii
+hexlify = lambda data: binascii_pipe and binascii.hexlify(data) or data
+unhexlify = lambda data: binascii_pipe and binascii.unhexlify(data) or data

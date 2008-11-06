@@ -1,12 +1,12 @@
 #!/usr/bin/env python
 
 '''
-    **************************************
-    messages.py (part of freespeech.py)
-    **************************************
+**************************************
+messages.py (part of freespeech.py)
+**************************************
 
 Message Frames Structure:
-    A.B.C.D.TYPE.LEN.LEN.BDY.BDY---.BDY.BDY.D.C.B.A        
+    A.B.C.D.TYPE.LEN.LEN.BDY.BDY...BDY.BDY.D.C.B.A        
 
 class Field(object)
     represents a single byte of data stored within a buffer.
@@ -68,9 +68,9 @@ __license__ = 'GPLv3'
 __all__ = ['BaseMessage', 'ByteField', 'ChangeStatus', 'CharField', 'ClientAnswer', 
     'ClientHangupRequest', 'ClientHangupRequestAck', 'ClientInvite', 'ClientInviteAck', 
     'ClientRTP', 'CommMessage', 'Field', 'Hangup', 'IPField', 'IntField', 'KeepAlive', 
-    'KeepAliveAck', 'LoginReply', 'LoginRequest', 'Logout', 'ServerForwardAnswer', 
-    'ServerForwardHangupRequest', 'ServerForwardInvite', 'ServerForwardRing', 
-    'ServerHangupRequestAck', 'ServerOverloaded', 'ServerRTPRelay', 
+    'KeepAliveAck', 'LoginReply', 'LoginRequest', 'Logout', 'SignalingMessage', 
+    'ServerForwardAnswer', 'ServerForwardHangupRequest', 'ServerForwardInvite', 
+    'ServerForwardRing', 'ServerHangupRequestAck', 'ServerOverloaded', 'ServerRTPRelay', 
     'ServerRejectInvite', 'ShortField', 'ShortResponse', 'StringField', 
     'UUIDField', 'MessageTypes', 'string_to_ctx']
     
@@ -103,13 +103,14 @@ class CommMessage(object):
         
         # for login request create new context, for others extract from the message
         if (hasattr(self.msg, 'client_ctx')):
-            self.client_ctx = self.msg.client_ctx
+            self.client_ctx = self.msg.client_ctx.value
+            
         elif isinstance(self.msg, (LoginRequest,)):
             client_ctx = string_to_ctx(self.msg.username.value)
             print 'creating a client_ctx ->', 'username:' , self.msg.username.value, 'ctx:', client_ctx, '<-'
             self.client_ctx = client_ctx
             
-        self.call_ctx = hasattr(self.msg, 'call_ctx') and self.msg.call_ctx
+        self.call_ctx = hasattr(self.msg, 'call_ctx') and self.msg.call_ctx.value
         
     def __repr__(self):
         return 'from %s <%s>, type %s, msg %s' % (self.addr, self.client_ctx, self.msg_type, self.msg.__repr__())
@@ -254,6 +255,11 @@ class BaseMessage(object):
     def set_values(self, **kwargs):
         items = (p for p in self.seq if p[0] in kwargs)
         self._set_values(items, kwargs)
+        
+    def dict_fields(self):
+        return dict(
+            ((self.__dict__[field[0]].name, 
+                    self.__dict__[field[0]].value) for field in self.seq))
         
     def _set_values(self, items, values_dict=None):
         start = 0 # first field position
@@ -413,14 +419,27 @@ class ClientInviteAck(SignalingMessage):
         self.seq = [
             ('client_ctx', UUIDField),
             ('call_ctx', UUIDField),
-            ('client_status', ByteField),
+            ('client_status', CharField),
             ('client_public_ip', IPField),
             ('client_public_port', IntField)]
         
+        self.type_code = '\x00\x07'
+        
         BaseMessage.__init__(self, *args, **kwargs)
         
-class ServerForwardRing(ClientInviteAck):
-    pass
+class ServerForwardRing(SignalingMessage):
+    def __init__(self, *args, **kwargs):
+        self.seq = [
+            ('client_ctx', UUIDField),
+            ('call_ctx', UUIDField),
+            ('client_status', CharField),
+            ('call_type', ByteField),
+            ('client_public_ip', IPField),
+            ('client_public_port', IntField)]
+            
+        self.type_code = '\x00\x0a'
+        
+        SignalingMessage.__init__(self, *args, **kwargs)
     
 class ClientAnswer(SignalingMessage):
     def __init__(self, *args, **kwargs):
@@ -429,10 +448,13 @@ class ClientAnswer(SignalingMessage):
             ('call_ctx', UUIDField),
             ('codec', ByteField)]
             
-        BaseMessage.__init__(self, *args, **kwargs)
+        self.type_code = '\x00\x0b'
+        SignalingMessage.__init__(self, *args, **kwargs)
         
-class ServerForwardAnswer(SignalingMessage):
-    pass
+class ServerForwardAnswer(ClientAnswer):
+    def __init__(self, *args, **kwargs):
+        ClientAnswer.__init__(self, *args, **kwargs)
+        self.type_code = '\x00\x0c'
     
 class ClientRTP(BaseMessage):
     def __init__(self, *args, **kwargs):
@@ -485,7 +507,9 @@ MessageTypes = dict({
     '\x00\x08': ServerForwardInvite,
     '\x00\x09': ServerRejectInvite,
     '\x00\x0a': ServerForwardRing,
-    '\x00\x0b': ServerOverloaded
+    '\x00\x0b': ClientAnswer,
+    '\x00\x0c': ServerForwardAnswer,
+    '\x00\xff': ServerOverloaded,
 })
 
 

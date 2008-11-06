@@ -2,47 +2,76 @@ import sys
 import socket
 import struct
 import time
-
 import Queue
+
 from messageparser import Packer, Parser
 from threading import Thread
 from messages import *
-from config import Codecs
+from config import Codecs, ClientStatus
 from decorators import printargs
 
 
-from twisted.internet import reactor
-from twisted.internet.protocol import Protocol, ClientCreator
-from sys import stdout
-
-
 class TcpClient(Thread):
-    def __init__(self, host, port):
+    def __init__(self, (host, port), recv_callback = None):
         Thread.__init__(self)
-        self.host, self.port= host, port
+        #self.host, self.port= host, port
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        print 'connecting..'
-        self.socket.connect((self.host, self.port))
-        print 'connected!'
+        self.socket.connect((host, port))
+        self.recv_callback = recv_callback
 
     def send(self, msg):
-        print 'TcpClient.send:', msg
         self.socket.send(msg)
                         
     def run(self):
-        data = 'dummy'
+        data = '^#$_@!#$'
         while data:
             data = self.socket.recv(1024*4)
             print 'recieved:', repr(data)
+            self.recv_callback and self.recv_callback(data)
             
     def close(self):
         self.socket.close()
             
-def create_login_msg(username, password='0'*20):
-    lr = LoginRequest()
-    lr.set_values(
+class SnoipClient(object):
     
-    )
+    def __init__(self, (host, port)):
+        self.client = TcpClient(host, port)
+        self.client.recv_callback = self.recv
+        self.parser = Parser()
+        self.client.start()
+        
+    def recv(self, data):
+        msg_type, buf = self.parser.body(data)
+        print 'msg_type', msg_type
+        if msg_type in MessageTypes:
+            msg = MessageTypes[msg_type](buf=buf)
+            if isinstance(msg, LoginReply):
+                self.login_reply(msg)
+            elif isinstance(msg, ServerForwardInvite):
+                self.client_invite_ack(msg)
+                
+    def login_request(self, username, password):
+        data = create_login_msg(username, password)
+        self._send(data)
+        
+    def login_reply(self, msg):
+        self.client_ctx = msg.client_ctx.value
+        
+    def invite(self, username):
+        data = create_invite(self.client_ctx, username)
+        self._send(data)
+        
+    def ack_invite(self, sfi):
+        data = client_invite_ack(sfi)
+        self._send(data)
+        
+    def answer(self):
+        pass
+        
+    def _send(self, data):
+        self.client.send(data)
+        
+def create_login_msg(username, password='0'*20):
     header = '\xab\xcd'
     trailer = '\xdc\xba'
     msg_type = '\x00\x01'
@@ -71,10 +100,22 @@ def create_invite(ctx, username):
         codec_list = ''.join(Codecs.values()))
         
     return ci.serialize()
-        
+    
+@printargs
+def client_invite_ack(invite):
+    cia = ClientInviteAck()
+    cia.set_values(
+        client_ctx = invite.client_ctx.value,
+        call_ctx = invite.call_ctx.value, 
+        client_status = ClientStatus.Ringing,
+        client_public_ip = invite.client_public_ip.value, 
+        client_public_port = invite.client_public_port.value
+    )
+    return cia.serialize()
+    
 @printargs
 def network_login(username, password):
-    login = create_login_msg(username, password)    
+    login = create_login_msg(username, password)
     client = TcpClient('localhost', 50009)
     client.start()
     time.sleep(0.5)

@@ -66,94 +66,6 @@ from twisted.internet import reactor
 from threading import Thread
 from utils import Storage
 
-#~ from socket import *
-#~ from SocketServer import *
-
-
-#~ #TCP
-#~ class StreamServer(BaseRequestHandler):
-    #~ def __init__(self, handler=None, register=None):
-        #~ self.run = True
-        #~ self.handler = handler
-        #~ self.register = register
-        #~ self.id = uuid.uuid4()
-        
-    #~ # nice hack! super.__init__ will be called
-    #~ def __call__(*args):
-        #~ BaseRequestHandler.__init__(*args)
-    
-    #~ def setup(self):
-        #~ print self.client_address, 'connected!'
-        #~ if self.register:
-            #~ self.register(self.client_address, self, 'tcp', self.id)
-        
-    #~ def handle(self):
-        #~ data = 'dummy'
-        #~ while data and self.run:
-            #~ data = self.request.recv(4*1024)
-            #~ if data and self.handler:
-                #~ print 'server received:', self.client_address, data
-                #~ self.handler(self.client_address, data)
-    
-    #~ def send(self, msg):
-        #~ self.request.send(msg)
-              
-    #~ def finish(self):
-        #~ print self.client_address, 'disconnected!'
-        #~ self.request.send('bye ' + str(self.client_address) + '\n')
-        
-#~ #UDP        
-#~ class DatagramServer(object):
-    #~ def __init__(self, addr, port, handler=None, register=None):
-        #~ self.addr = addr
-        #~ self.port = port
-        #~ self.handler = handler
-        #~ self.register = register
-        #~ self.socket = socket(AF_INET,SOCK_DGRAM)
-        #~ self.id = uuid.uuid4()
-        #~ self.run = True
-                
-    #~ def start(self):
-        #~ try:
-            #~ self.socket.bind((self.addr, self.port))
-            #~ while self.run:
-                #~ data, addr = self.socket.recvfrom(4*1024)
-                #~ if data:
-                    #~ print 'server received:', self.client_address, data
-                    #~ if self.register:
-                        #~ self.register(addr, self, 'udp', self.id)
-                    #~ if self.handler:
-                        #~ self.handler(addr, data)
-                
-            #~ self.socket.close()
-        #~ except Exception, e:
-            #~ pass
-        
-    #~ def send(self, msg, addr):
-        #~ self.socket.sendto(msg, addr)
-        
-    #~ def stop(self):
-        #~ try:
-            #~ self.run = False
-            #~ self.socket.close()
-        #~ except:
-            #~ pass
-
-#~ def serve(proto, addr, port, handler, register):
-    #~ def tcp(addr, port, handler, register):
-        #~ req_handler = StreamServer(handler, register)
-        #~ SocketServer.ThreadingTCPServer((addr, port), req_handler).serve_forever()
-    
-    #~ def udp(addr, port, handler, register):
-        #~ DatagramServer(addr, port, handler, register).start()
-    
-    #~ targets = {'tcp': tcp, 'udp': udp}
-    
-    #~ if proto in targets:
-        #~ t = Thread(target = targets[proto], args = (addr, port, handler, register))
-        #~ t.start()
-        #~ print 'serving %s at %s:%s' % (proto, addr, port)
-        
 class TcpServer(Protocol):
     dataReceivedHandler = session.recv_msg
         
@@ -204,13 +116,19 @@ def start_tcp(port):
     session.servers_pool.add(id, 'tcp', tcp_server)
     reactor.listenTCP(port, tcp_server())
     reactor.run(installSignalHandlers=0)
-    
+
+def start_udp(port):
+    pass
+    '''id = uuid.uuid4().hex
+    # todo: pass this id to the handler so we don't have to look for it at serverpool.send_to
+    tcp_server = TcpServerFactory(id)
+    session.servers_pool.add(id, 'tcp', tcp_server)
+    reactor.listenTCP(port, tcp_server())
+    reactor.run(installSignalHandlers=0)
+    '''
 def serve(proto, port):
     
-    def udp(port):
-        pass #DatagramServer(port, handler).start()
-    
-    targets = {'tcp': start_tcp} #, 'udp': udp}
+    targets = {'tcp': start_tcp,'udp': start_udp}
     
     if proto in targets:
         t = Thread(target = targets[proto], args = (port,))
