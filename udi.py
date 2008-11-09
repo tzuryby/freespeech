@@ -5,9 +5,9 @@ import time
 sc = SnoipClient(('localhost', 50009))
 sc.login('udi', '0'*20)
 
-#~ time.sleep(10)
-
-#~ with open('udi.rtp', 'r') as lines:
-    #~ for line in lines:
-        #~ sc.feed_rtp(line)
-        #~ time.sleep(3)
+time.sleep(18)
+print 'I will feed you this organic RTP'
+with open('data.rtp', 'r') as lines:
+    for line in lines:
+        sc.feed_rtp(line)
+        time.sleep(3)

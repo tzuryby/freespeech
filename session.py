@@ -157,20 +157,23 @@ def remove_old_clients():
             print 'removing inactive client', repr(ctx_id)
             del ctx_table[ctx_id]
         time.sleep(CLIENT_EXPIRE)
+        print 'next loop at remove_ol\'_ladies'
 
-def inbound_queue():
-    while True:
-        try:
-            yield inbound_messages.get(block=0)
-        except Queue.Empty:
-            yield None
+#~ def inbound_queue():
+    #~ while True:
+        #~ try:
+            #~ yield inbound_messages.get(block=0)
+        #~ except Queue.Empty:
+            #~ print 'empty queue'
+            #~ yield None
             
-def outbound_queue():
-    while True:
-        try:
-            yield outbound_messages.get(block=0)
-        except Queue.Empty:
-            yield None
+#~ def outbound_queue():
+    #~ while True:
+        #~ try:
+            #~ yield outbound_messages.get(block=0)
+        #~ except Queue.Empty:
+            #~ print 'Queue.Empty'
+            #~ yield None
             
 '''             funcitonality not implemented                               '''
 KeepAliveSession = SyncAddressBookSession = ChangeStatusSession = None
@@ -178,15 +181,17 @@ KeepAliveSession = SyncAddressBookSession = ChangeStatusSession = None
 
 def handle_inbound_queue():
     while True:
-        for req in inbound_queue():
+        try:
+            req = inbound_messages.get(block=0)
             if req:
                 _filter(req)
-                
-        time.sleep(0.10)
+        except Queue.Empty:
+            time.sleep(0.05)
         
 def handle_outbound_queue():
     while True:
-        for rep in outbound_queue():
+        try:
+            rep = outbound_messages.get(block=0)
             if rep and hasattr(rep, 'msg') and hasattr(rep, 'addr'):
                 print 'server reply or forward a message to', rep.addr
                 try:
@@ -195,8 +200,8 @@ def handle_outbound_queue():
                     reactor.callFromThread(servers_pool.send_to,rep.addr, data)
                 except:
                     print 'error while calling reactor.callFromThread at handle_outbound_queue'
-                    
-        time.sleep(0.10)
+        except Queue.Empty:
+            time.sleep(0.05)
         
 def _filter(request):
     _out = None
