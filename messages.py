@@ -174,17 +174,25 @@ class IntField(Field):
 class StringField(Field):
     '''variable length string'''
     def __init__(self, start, format, name=None):
-        Field.__init__(self, start, format, name)
+        try:
+            Field.__init__(self, start, format, name)
+        except:
+            print 'error@StringField.__init__'
+            print 'start %s, format %s, name %s' %(start, format, name)
             
     def __setattr__(self, k, v):
-        if k == 'value':
-            '''a wrapper around x.value'''
-            # if you change the format you must change the length as well.
-            self.format = '!%dc' % len(v)
-            self.length = struct.calcsize(self.format)
-            self._value = ''.join(v)
-        else:
-            self.__dict__[k] = v
+        try:
+            if k == 'value':
+                '''a wrapper around x.value'''
+                # if you change the format you must change the length as well.
+                self.format = '!%dc' % len(v)
+                self.length = struct.calcsize(self.format)
+                self._value = ''.join(v)
+            else:
+                self.__dict__[k] = v
+        except:
+            print 'error@StringField.__setattr__'
+            print 'name %s, k %s,v %s, format %s, length %s' % (self.name, k, v, self.format, self.length)
             
     def __getattr__(self, k):
         if k == 'value':
@@ -257,9 +265,11 @@ class BaseMessage(object):
         self._set_values(items, kwargs)
         
     def dict_fields(self):
-        return dict(
+        x = dict(
             ((self.__dict__[field[0]].name, 
                     self.__dict__[field[0]].value) for field in self.seq))
+        print 'dict_fields:\n', x
+        return x
         
     def _set_values(self, items, values_dict=None):
         start = 0 # first field position
@@ -288,7 +298,6 @@ class BaseMessage(object):
     def _pack_values(self):
         self._init_buffer()
         for v in self.seq:
-            '_pack_values:', v
             self.__dict__[v[0]].pack_into(self.buf)
         
     def get_buffer(self):
@@ -301,7 +310,6 @@ class BaseMessage(object):
     def serialize(self):
         self._pack_values()
         ret = frame_msg(self.type_code, self.buf.raw)
-        print 'serializing:', repr(ret)
         return ret
         
     #~ def buffer_format(self):
@@ -376,7 +384,8 @@ class KeepAliveAck(BaseMessage):
         BaseMessage.__init__(self, *args, **kwargs)
 
 class SignalingMessage(BaseMessage):
-    pass
+    def __init__(self, *args, **kwargs):
+        BaseMessage.__init__(self, *args, **kwargs)
     
 class ClientInvite(SignalingMessage):
     def __init__(self, *args, **kwargs):
@@ -388,7 +397,7 @@ class ClientInvite(SignalingMessage):
             ('codec_list', StringField, lambda: '!%dc' % self.num_of_codecs.value)]
             
         self.type_code = '\x00\x06'
-        BaseMessage.__init__(self, *args, **kwargs)
+        SignalingMessage.__init__(self, *args, **kwargs)
         
 class ServerRejectInvite(ShortResponse):
     def __init__(self, *args, **kwargs):
@@ -412,7 +421,7 @@ class ServerForwardInvite(SignalingMessage):
             ('codec_list', StringField, lambda: '!%dc' % self.num_of_codecs.value)]
             
         self.type_code = '\x00\x08'
-        BaseMessage.__init__(self, *args, **kwargs)
+        SignalingMessage.__init__(self, *args, **kwargs)
         
 class ClientInviteAck(SignalingMessage):
     def __init__(self, *args, **kwargs):
@@ -425,7 +434,7 @@ class ClientInviteAck(SignalingMessage):
         
         self.type_code = '\x00\x07'
         
-        BaseMessage.__init__(self, *args, **kwargs)
+        SignalingMessage.__init__(self, *args, **kwargs)
         
 class ServerForwardRing(SignalingMessage):
     def __init__(self, *args, **kwargs):
@@ -446,28 +455,45 @@ class ClientAnswer(SignalingMessage):
         self.seq = [
             ('client_ctx', UUIDField),
             ('call_ctx', UUIDField),
-            ('codec', ByteField)]
+            ('codec', CharField)]
             
         self.type_code = '\x00\x0b'
         SignalingMessage.__init__(self, *args, **kwargs)
         
-class ServerForwardAnswer(ClientAnswer):
+class ServerForwardAnswer(SignalingMessage):
     def __init__(self, *args, **kwargs):
-        ClientAnswer.__init__(self, *args, **kwargs)
+        self.seq = [
+            ('client_ctx', UUIDField),
+            ('call_ctx', UUIDField),
+            ('codec', CharField)]
+            
         self.type_code = '\x00\x0c'
+        SignalingMessage.__init__(self, *args, **kwargs)
+        
+    def copy_from(self, client_answer):
+        self.set_values(**client_answer.dict_fields())
+        return self
     
 class ClientRTP(BaseMessage):
     def __init__(self, *args, **kwargs):
         self.seq = [
             ('client_ctx', UUIDField),
             ('call_ctx', UUIDField),
-            ('rtp_bytes', StringField, '!%db' % 1024*4)]
+            ('rtp_bytes', StringField, '!%dc' % (32))]
             
+        self.type_code = '\x00\x0d'
         BaseMessage.__init__(self, *args, **kwargs)
         
 class ServerRTPRelay(ClientRTP):
-    pass
-    
+    def __init__(self, *args, **kwargs):
+        ClientRTP.__init__(self, *args, **kwargs)
+        self.type_code = '\x00\x0e'
+        
+    def copy_from(self, client_rtp):
+        self.set_values(**client_rtp.dict_fields())
+        return self
+        
+        
 class Hangup(SignalingMessage):
     def __init__(self, *args, **kwargs):
         self.seq = [
@@ -509,6 +535,8 @@ MessageTypes = dict({
     '\x00\x0a': ServerForwardRing,
     '\x00\x0b': ClientAnswer,
     '\x00\x0c': ServerForwardAnswer,
+    '\x00\x0d': ClientRTP,
+    '\x00\x0e': ServerRTPRelay,
     '\x00\xff': ServerOverloaded,
 })
 

@@ -1,3 +1,4 @@
+from __future__ import with_statement
 import sys
 import socket
 import struct
@@ -9,6 +10,8 @@ from threading import Thread
 from messages import *
 from config import Codecs, ClientStatus
 from decorators import printargs
+
+
 
 
 class TcpClient(Thread):
@@ -35,6 +38,10 @@ class TcpClient(Thread):
 class SnoipClient(object):
     
     def __init__(self, (host, port)):
+        self.call_ctx  = None
+        self.client_ctx = None
+        self.username = None
+        
         self.client = TcpClient((host, port), self.recv)
         self.parser = Parser()
         self.client.start()
@@ -48,28 +55,61 @@ class SnoipClient(object):
                 self.login_reply(msg)
             elif isinstance(msg, ServerForwardInvite):
                 self.ack_invite(msg)
+            elif isinstance(msg, ServerForwardRing):
+                self.invited_ctx = msg.client_ctx.value
+                print '60:current call_ctx', repr(self.call_ctx), 'new call_ctx', repr(msg.call_ctx.value)
+                self.call_ctx = msg.call_ctx.value
+                print 'ringing...'
+            elif isinstance(msg, ServerForwardAnswer):
+                self.invited_ctx = msg.client_ctx.value
+                print 'call was answered by other party...'
+            elif isinstance(msg, ServerRTPRelay):
+                self.rtp_received(msg)
+                
                 
     def login(self, username, password):
+        self.username = username
+        print 'snoipclient-login'
         data = create_login_msg(username, password)
         self._send(data)
         
     def login_reply(self, msg):
-        print 'login reply arrived'
+        print 'snoipclient-login_reply'
         self.client_ctx = msg.client_ctx.value
         
     def invite(self, username):
+        print 'snoipclient-invite'
         data = create_invite(self.client_ctx, username)
         self._send(data)
         
     def ack_invite(self, sfi):
+        print 'snoipclient-ack_invite'
+        print '87:current call_ctx', repr(self.call_ctx), 'new call_ctx', repr(sfi.call_ctx.value)
+        self.call_ctx = sfi.call_ctx.value
         data = client_invite_ack(sfi)
         self._send(data)
+        time.sleep(3)
+        self.answer()
         
     def answer(self):
-        pass
+        print 'snoipclient-answer'
+        ca = ClientAnswer()
+        ca.set_values(client_ctx=self.client_ctx, call_ctx=self.call_ctx, codec=Codecs.values()[0])
+        print 'answering a ring of call_ctx:', repr(self.call_ctx)
+        self._send(ca.serialize())
         
     def _send(self, data):
         self.client.send(data)
+        
+    def feed_rtp(self, rtp_bytes):
+        crtp = ClientRTP()
+        crtp.set_values(client_ctx=self.invited_ctx, call_ctx=self.call_ctx, rtp_bytes=rtp_bytes)
+        self._send(crtp.serialize())
+        
+    def rtp_received(self, msg):
+        bytes = msg.rtp_bytes.value
+        with open(self.username + '_incoming_rtp', 'a') as f:
+            f.write(bytes)
         
 def create_login_msg(username, password='0'*20):
     header = '\xab\xcd'
@@ -89,7 +129,6 @@ def create_login_msg(username, password='0'*20):
     return msg
 
 
-@printargs
 def create_invite(ctx, username):
     ci = ClientInvite()
     ci.set_values(
@@ -101,7 +140,6 @@ def create_invite(ctx, username):
         
     return ci.serialize()
     
-@printargs
 def client_invite_ack(invite):
     cia = ClientInviteAck()
     cia.set_values(
@@ -111,5 +149,11 @@ def client_invite_ack(invite):
         client_public_ip = invite.client_public_ip.value, 
         client_public_port = invite.client_public_port.value
     )
+    
+    print 'will ack invite of call_ctx:', repr(invite.call_ctx.value)
     return cia.serialize()
     
+    
+def hexlify(data):
+    import binascii
+    return binascii.hexlify(data)

@@ -57,9 +57,9 @@ class CtxTable(Storage):
     def add_client(self, (ctx_id, ctx_data)):
         self[ctx_id] = ctx_data
         
-    def add_call(self, client_ctx, call_ctx):
-        if client_ctx in self:
-            self[client_ctx].call_ctx = call_ctx
+    #~ def add_call(self, client_ctx, call_ctx):
+        #~ if client_ctx in self:
+            #~ self[client_ctx].call_ctx = call_ctx
             
     def clients_ctx(self):
         '''all active clients (the keys)'''
@@ -69,18 +69,18 @@ class CtxTable(Storage):
         '''all active clients (the values)'''
         return self.values()
             
-    def calls_ctx(self):
-        '''all active calls (the keys)'''
-        return (self[ctx].call_ctx.ctx_id for ctx in self if self[ctx].call_ctx)
-            
     def calls(self):
-        '''all active calls the values'''
+        '''all active calls'''
         return (self[ctx].call_ctx for ctx in self if self[ctx].call_ctx)
             
-    def get_call_ctx(self, call_ctx):
-        for i in self.calls():
-            if i.ctx_id == call_ctx:
-                return i
+    def calls_ctx(self):
+        '''all active calls contexts ids'''
+        return (call.ctx_id for call in self.calls())
+            
+    def find_call(self, call_ctx):
+        for call in self.calls():
+            if call.ctx_id == call_ctx:
+                return call
             
     def get_addr(self, client_ctx):
         '''return the last ip address registered for this client'''
@@ -218,7 +218,7 @@ def _filter(request):
             _out = call_session_handler(request)
             
     if not _out:
-        print 'filter is throwing away unknown message:', repr(msg)
+        print 'filter is throwing away unknown msg_type: %s, %s'  %(repr(msg_type), repr(msg))
     else:
         outbound_messages.put(_out)
         if ctx:
@@ -283,7 +283,7 @@ class CallSession(object):
             return self._handle_invite(request)
         elif isinstance(request.msg, SignalingMessage):
             return self._handle_signaling(request)
-        elif request.msg_type == ServerRTPRelay:
+        elif isinstance(request.msg, ClientRTP):
             return self._handle_rtp(request)
             
     def _handle_invite(self, request):
@@ -292,11 +292,11 @@ class CallSession(object):
         
         # calle is not logged in
         if calle_ctx not in ctx_table:
-            self._reject(config.Errors.CalleeNotFound, request)
+            return self._reject(config.Errors.CalleeNotFound, request)
             
         # calle is in another call session
         elif ctx_table[calle_ctx].call_ctx:
-            self._reject(config.Errors.CalleeUnavailable, request)
+            return self._reject(config.Errors.CalleeUnavailable, request)
             
         #todo: add here `away-status` case handler
         matched_codecs = self._matched_codecs(request.msg.codec_list.value)
@@ -352,7 +352,7 @@ class CallSession(object):
         
         if call_ctx in ctx_table.calls_ctx():
             calle_addr = request.addr
-            call_ctx = ctx_table.get_call_ctx(call_ctx)
+            call_ctx = ctx_table.find_call(call_ctx)
             if call_ctx:
                 caller_addr = ctx_table.get_addr(call_ctx.caller_ctx)                
                 if isinstance(msg, ClientInviteAck):                
@@ -360,29 +360,38 @@ class CallSession(object):
                     ctr = ServerForwardRing
                 elif isinstance(msg, ClientAnswer):
                     buf = self._forward_answer(msg)
+                    print 'ServerForwardAnswer::copy_from yields:', repr(buf)
                     ctr = ServerForwardAnswer
                 
         else:
-            print 'call is out of context:'
-            print repr(call_ctx)
-            print list(ctx_table.calls_ctx())
-            
+            print 'call is out of context:', repr(call_ctx)
+
         return ctr and CommMessage(caller_addr, ctr, buf)
-            
+        
     def _handle_rtp(self, request):
-        if self._call_in_ctx(request.msg.call_ctx):
-            # do your duty
-            pass
+        call_ctx = ctx_table.find_call(request.call_ctx)
+        if call_ctx:
+            forward_to = (call_ctx.caller_ctx == request.client_ctx and call_ctx.calle_ctx) \
+                or request.client_ctx                
+            addr = ctx_table.get_addr(forward_to)
+            buf = ServerRTPRelay().copy_from(request.msg).get_buffer().raw #serialize()
+            print '>> forwarding an rtp message to', addr
+            return CommMessage(addr, ServerRTPRelay, buf)
+        else:    
+            print self, '::_handle_rtp: call is out of context'
+            print 'current_call:', repr(request.call_ctx)
+            print 'all calls:', list(ctx_table.calls_ctx())
+            print 'all_clients', ctx_table.keys()
         
     def _reject(self, reason, request):
         reject = ServerRejectInvite(client_ctx=request.msg.client_ctx, reason=reason)
-        return CommMessage(addr, ServerRejectInvite, reject.get_buffer())
+        return CommMessage(addr, ServerRejectInvite, reject.get_buffer().raw)
         
     # client_answer_to_server_forward_answer
     def _forward_answer(self, ca):
-        sfa = ServerForwardAnswer()
-        sfa.set_values(**ca.dict_fields())
-        return sfa.deserialize()
+        #~ sfa = ServerForwardAnswer()
+        #~ sfa.set_values(**ca.dict_fields())
+        return ServerForwardAnswer().copy_from(ca).get_buffer().raw #serialize()
         
     # client_invite_ack_to_server_forward_ring
     def _forward_invite_ack(self, cia, call_type = CallTypes.ViaProxy):
@@ -394,7 +403,7 @@ class CallSession(object):
             call_type = call_type,
             client_public_ip = cia.client_public_ip.value,
             client_public_port = cia.client_public_port.value)
-        buf = sfr.serialize()
+        buf = sfr.get_buffer().raw #.serialize()
         print repr('_forward_invite_ack:'), buf
         return buf
         
