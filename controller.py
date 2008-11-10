@@ -14,5 +14,5 @@ def run_all():
         Thread(target = thread).start()
         
 if __name__ == '__main__':
-    run_all()    
+    run_all()  
     serve(config.Listeners)

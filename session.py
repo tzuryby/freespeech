@@ -30,29 +30,6 @@ class ServersPool(Storage):
     def add(self, id, proto, server):
         self[id] = Storage(proto = proto, server=server)
         
-'''
-    request - reply life cycle:
-        recv_msg -> packer -> inbound_queue - > handle_inbound_queue ->
-        _filter -> [switch-parsing/handling] -> outbound_queue ->
-        handle_outbound_queue -> reactor.callFromThread
-        
-    the first time a client is connected:
-        it sends a login-request
-        if a login request succeed as a result the system creates client_ctx
-        this context id is registered at the ctx_table along with the client's address
-        ** at every message the system saves the last addr in order to reply to it.
-            (in udp it mihgt changed during active session)
-        ** every keep-alive the system stamps the client
-        ** when a client sends invite to another client
-            the caller's call_ctx is stamped by a new call_ctx
-            when the calle answer the calle is stampped by the same data.
-            
-        to do: add log mechanism for the calls (ie CDR)
-        
-    for each client I save the addr, and the server_id that is the tcp/udp listener 
-    which is connected to. when replying to a client simply call server[server_id].send_to(addr, msg)
-'''
-
 class CtxTable(Storage):
     def add_client(self, (ctx_id, ctx_data)):
         self[ctx_id] = ctx_data
@@ -165,7 +142,7 @@ def handle_inbound_queue():
             if req:
                 _filter(req)
         except Queue.Empty:
-            time.sleep(0.05)
+            time.sleep(0.010)
         
 def handle_outbound_queue():
     while True:
@@ -180,7 +157,7 @@ def handle_outbound_queue():
                 except:
                     print 'error while calling reactor.callFromThread at handle_outbound_queue'
         except Queue.Empty:
-            time.sleep(0.05)
+            time.sleep(0.010)
         
 def _filter(request):
     _out = None
@@ -341,11 +318,12 @@ class CallSession(object):
                     buf = self._forward_invite_ack(msg)
                     ctr = ServerForwardRing
                 elif isinstance(msg, ClientAnswer):
-                    buf = self._forward_answer(msg)
+                    # ClientAnswer is forwarded as is
+                    buf = msg.get_buffer().raw
                     ctr = ClientAnswer                
         else:
             print '_handle_signaling: call is out of context', repr(call_ctx)
-
+            
         return ctr and CommMessage(caller_addr, ctr, buf)
         
     def _handle_rtp(self, request):
@@ -353,24 +331,15 @@ class CallSession(object):
         if call_ctx:
             forward_to = (call_ctx.caller_ctx == request.client_ctx and call_ctx.calle_ctx) \
                 or request.client_ctx                
-            addr = ctx_table.get_addr(forward_to)
-            buf = request.msg.get_buffer().raw
-            print '>> forwarding an rtp message to', addr
-            return CommMessage(addr, ClientRTP, buf)
+            request.addr = ctx_table.get_addr(forward_to)
+            return request
         else:    
             print self, '_handle_rtp: call is out of context', repr(call_ctx)
             
     def _reject(self, reason, request):
-        reject = ServerRejectInvite(client_ctx=request.msg.client_ctx, reason=reason)
+        reject = ServerRejectInvite(client_ctx=request.client_ctx, reason=reason)
         return CommMessage(addr, ServerRejectInvite, reject.get_buffer().raw)
         
-    # client_answer_to_server_forward_answer
-    def _forward_answer(self, ca):
-        #~ sfa = ServerForwardAnswer()
-        #~ sfa.copy_from(ca)
-        return ca.get_buffer().raw
-        
-    # client_invite_ack_to_server_forward_ring
     def _forward_invite_ack(self, cia, call_type = CallTypes.ViaProxy):
         sfr = ServerForwardRing()
         sfr.set_values(
