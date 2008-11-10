@@ -194,7 +194,7 @@ def _filter(request):
             messages.LoginRequest: login_handler,
             messages.Logout: logout_handler,
             messages.KeepAlive: KeepAliveSession,
-            messages.ChangeStatus: ChangeStatusSession,
+#            messages.ChangeStatus: ChangeStatusSession,
         }
         if msg_type in switch:
             _out = switch[msg_type](request)
@@ -342,7 +342,7 @@ class CallSession(object):
                     ctr = ServerForwardRing
                 elif isinstance(msg, ClientAnswer):
                     buf = self._forward_answer(msg)
-                    ctr = ServerForwardAnswer                
+                    ctr = ClientAnswer                
         else:
             print '_handle_signaling: call is out of context', repr(call_ctx)
 
@@ -354,9 +354,9 @@ class CallSession(object):
             forward_to = (call_ctx.caller_ctx == request.client_ctx and call_ctx.calle_ctx) \
                 or request.client_ctx                
             addr = ctx_table.get_addr(forward_to)
-            buf = ServerRTPRelay().copy_from(request.msg).get_buffer().raw #serialize()
+            buf = request.msg.get_buffer().raw
             print '>> forwarding an rtp message to', addr
-            return CommMessage(addr, ServerRTPRelay, buf)
+            return CommMessage(addr, ClientRTP, buf)
         else:    
             print self, '_handle_rtp: call is out of context', repr(call_ctx)
             
@@ -366,9 +366,9 @@ class CallSession(object):
         
     # client_answer_to_server_forward_answer
     def _forward_answer(self, ca):
-        sfa = ServerForwardAnswer()
-        sfa.copy_from(ca)
-        return sfa.get_buffer().raw
+        #~ sfa = ServerForwardAnswer()
+        #~ sfa.copy_from(ca)
+        return ca.get_buffer().raw
         
     # client_invite_ack_to_server_forward_ring
     def _forward_invite_ack(self, cia, call_type = CallTypes.ViaProxy):

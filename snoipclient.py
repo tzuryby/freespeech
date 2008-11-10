@@ -60,10 +60,10 @@ class SnoipClient(object):
                 print '60:current call_ctx', repr(self.call_ctx), 'new call_ctx', repr(msg.call_ctx.value)
                 self.call_ctx = msg.call_ctx.value
                 print 'ringing...'
-            elif isinstance(msg, ServerForwardAnswer):
+            elif isinstance(msg, ClientAnswer):
                 self.invited_ctx = msg.client_ctx.value
                 print 'call was answered by other party...'
-            elif isinstance(msg, ServerRTPRelay):
+            elif isinstance(msg, ClientRTP):
                 self.rtp_received(msg)
                 
                 
@@ -114,7 +114,7 @@ class SnoipClient(object):
 def create_login_msg(username, password='0'*20):
     header = '\xab\xcd'
     trailer = '\xdc\xba'
-    msg_type = '\x00\x01'
+    msg_type = '\x00\x02'
     
     username_length = struct.pack('!b', len(username))
     username = struct.pack('!%dc' % len(username), *(username))

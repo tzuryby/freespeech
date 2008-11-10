@@ -65,12 +65,12 @@ Copyrights - 2008
 __author__ = 'Tzury Bar Yochay'
 __version__ = '0.1'
 __license__ = 'GPLv3'
-__all__ = ['BaseMessage', 'ByteField', 'ChangeStatus', 'CharField', 'ClientAnswer', 
-    'ClientHangupRequest', 'ClientHangupRequestAck', 'ClientInvite', 'ClientInviteAck', 
-    'ClientRTP', 'CommMessage', 'Field', 'Hangup', 'IPField', 'IntField', 'KeepAlive', 
+__all__ = ['BaseMessage', 'ByteField', 'CharField', 'ClientAnswer', 
+    'CallHangup', 'CallHangupAck', 'ClientInvite', 'ClientInviteAck', 
+    'ClientRTP', 'CommMessage', 'Field', 'IPField', 'IntField', 'KeepAlive', 
     'KeepAliveAck', 'LoginReply', 'LoginRequest', 'Logout', 'SignalingMessage', 
-    'ServerForwardAnswer', 'ServerForwardHangupRequest', 'ServerForwardInvite', 
-    'ServerForwardRing', 'ServerHangupRequestAck', 'ServerOverloaded', 'ServerRTPRelay', 
+    'ServerForwardInvite', 
+    'ServerForwardRing', 'ServerOverloaded', 
     'ServerRejectInvite', 'ShortField', 'ShortResponse', 'StringField', 
     'UUIDField', 'MessageTypes', 'string_to_ctx']
     
@@ -320,12 +320,22 @@ class BaseMessage(object):
         
     def __repr__(self):
         return repr(self.serialize())
-        
+'''
+    '\x00\x01': ShortResponse,
+    '\x00\x02': LoginRequest,
+    '\x00\x03': LoginReply,
+    '\x00\x04': AlternateServerMessage,
+    '\x00\x05': Logout,
+    '\x00\x06': KeepAlive,
+    '\x00\x07': KeepAliveAck,
+
+'''        
 class ShortResponse(BaseMessage):
     def __init__(self, *args, **kwargs):
         self.seq = [
             ('client_ctx', UUIDField),
             ('result', ShortField)]
+        self.type_code = '\x00\x01'
         BaseMessage.__init__(self, *args, **kwargs)
         
 class LoginRequest(BaseMessage):    
@@ -337,7 +347,7 @@ class LoginRequest(BaseMessage):
             ('local_ip', IPField), 
             ('local_port', IntField)]
             
-        self.type_code = '\x00\x01'
+        self.type_code = '\x00\x02'
         BaseMessage.__init__(self, *args, **kwargs)
         
 class LoginReply(BaseMessage):
@@ -350,20 +360,19 @@ class LoginReply(BaseMessage):
             ('num_of_codecs', ByteField),
             ('codec_list', StringField, lambda: '!%dc' % self.num_of_codecs.value)]
             
-        self.type_code = '\x00\x02'
+        self.type_code = '\x00\x03'
         BaseMessage.__init__(self, *args, **kwargs)
 
-class ServerOverloaded(BaseMessage):
-    def __init__(self, *args, **kwargs):
-        self.seq = [('alternate_ip', IPField)]
-        
-        BaseMessage.__init__(self, *args, **kwargs)
+class AlternateServerMessage(BaseMessage):
+    type_code = '\x00\x04'
 
+    
 class Logout(BaseMessage):
     def __init__(self, *args, **kwargs):
         self.seq = [('client_ctx', UUIDField)]
-        
+        self.type_code = '\x00\x05'
         BaseMessage.__init__(self, *args, **kwargs)
+
     
 class KeepAlive(BaseMessage):
     def __init__(self, *args, **kwargs):
@@ -371,7 +380,7 @@ class KeepAlive(BaseMessage):
             ('client_ctx', UUIDField),
             ('client_public_ip', IPField),
             ('client_public_port', IntField)]
-        
+        self.type_code = '\x00\x06'
         BaseMessage.__init__(self, *args, **kwargs)
 
 class KeepAliveAck(BaseMessage):
@@ -380,8 +389,20 @@ class KeepAliveAck(BaseMessage):
             ('client_ctx', UUIDField),
             ('expire', IntField),
             ('refresh_contact_list', ByteField)]
-        
+        self.type_code = '\x00\x07'
         BaseMessage.__init__(self, *args, **kwargs)
+        
+
+'''
+    '\x00\x10': ClientInvite,
+    '\x00\x11': ServerRejectInvite,
+    '\x00\x12': ServerForwardInvite,
+    '\x00\x13': ClientInviteAck,
+    '\x00\x14': ServerForwardRing,
+    '\x00\x15': ClientAnswer,
+    '\x00\x16': ServerForwardAnswer,
+
+'''        
 
 class SignalingMessage(BaseMessage):
     def __init__(self, *args, **kwargs):
@@ -396,16 +417,19 @@ class ClientInvite(SignalingMessage):
             ('num_of_codecs', ByteField),
             ('codec_list', StringField, lambda: '!%dc' % self.num_of_codecs.value)]
             
-        self.type_code = '\x00\x06'
+        self.type_code = '\x00\x10'
         SignalingMessage.__init__(self, *args, **kwargs)
         
 class ServerRejectInvite(ShortResponse):
     def __init__(self, *args, **kwargs):
         BaseMessage.__init__(self, *args, **kwargs)
+        
         if ('client_ctx' in kwargs or 'reason' in kwargs) and 'buf' not in kwargs:
             self.set_values(client_ctx = kwargs['client_ctx'], reason = kwargs['reason'])
         else:
             raise 'Incorrect parameters'
+            
+        self.type_code = '\x00\x11'
 
 class ServerForwardInvite(SignalingMessage):
     def __init__(self, *args, **kwargs):
@@ -420,7 +444,7 @@ class ServerForwardInvite(SignalingMessage):
             ('num_of_codecs', ByteField),
             ('codec_list', StringField, lambda: '!%dc' % self.num_of_codecs.value)]
             
-        self.type_code = '\x00\x08'
+        self.type_code = '\x00\x12'
         SignalingMessage.__init__(self, *args, **kwargs)
         
 class ClientInviteAck(SignalingMessage):
@@ -432,7 +456,7 @@ class ClientInviteAck(SignalingMessage):
             ('client_public_ip', IPField),
             ('client_public_port', IntField)]
         
-        self.type_code = '\x00\x07'
+        self.type_code = '\x00\x13'
         
         SignalingMessage.__init__(self, *args, **kwargs)
         
@@ -446,7 +470,7 @@ class ServerForwardRing(SignalingMessage):
             ('client_public_ip', IPField),
             ('client_public_port', IntField)]
             
-        self.type_code = '\x00\x0a'
+        self.type_code = '\x00\x14'
         
         SignalingMessage.__init__(self, *args, **kwargs)
     
@@ -457,23 +481,28 @@ class ClientAnswer(SignalingMessage):
             ('call_ctx', UUIDField),
             ('codec', CharField)]
             
-        self.type_code = '\x00\x0b'
+        self.type_code = '\x00\x15'
         SignalingMessage.__init__(self, *args, **kwargs)
         
-class ServerForwardAnswer(SignalingMessage):
-    def __init__(self, *args, **kwargs):
-        self.seq = [
-            ('client_ctx', UUIDField),
-            ('call_ctx', UUIDField),
-            ('codec', CharField)]
+#~ class ServerForwardAnswer(SignalingMessage):
+    #~ def __init__(self, *args, **kwargs):
+        #~ self.seq = [
+            #~ ('client_ctx', UUIDField),
+            #~ ('call_ctx', UUIDField),
+            #~ ('codec', CharField)]
             
-        self.type_code = '\x00\x0c'
-        SignalingMessage.__init__(self, *args, **kwargs)
+        #~ self.type_code = '\x00\x16'
+        #~ SignalingMessage.__init__(self, *args, **kwargs)
         
-    def copy_from(self, client_answer):
-        self.set_values(**client_answer.dict_fields())
-        return self
-    
+    #~ def copy_from(self, client_answer):
+        #~ self.set_values(**client_answer.dict_fields())
+        #~ return self
+
+'''
+    '\x00\x20': ClientRTP,
+    '\x00\x21': ServerRTPRelay,
+
+'''
 class ClientRTP(BaseMessage):
     def __init__(self, *args, **kwargs):
         self.seq = [
@@ -481,63 +510,72 @@ class ClientRTP(BaseMessage):
             ('call_ctx', UUIDField),
             ('rtp_bytes', StringField, '!%dc' % (32))]
             
-        self.type_code = '\x00\x0d'
+        self.type_code = '\x00\x20'
         BaseMessage.__init__(self, *args, **kwargs)
         
-class ServerRTPRelay(ClientRTP):
-    def __init__(self, *args, **kwargs):
-        ClientRTP.__init__(self, *args, **kwargs)
-        self.type_code = '\x00\x0e'
+#~ class ServerRTPRelay(ClientRTP):
+    #~ def __init__(self, *args, **kwargs):
+        #~ ClientRTP.__init__(self, *args, **kwargs)
+        #~ self.type_code = '\x00\x0e'
         
-    def copy_from(self, client_rtp):
-        self.set_values(**client_rtp.dict_fields())
-        return self
+    #~ def copy_from(self, client_rtp):
+        #~ self.set_values(**client_rtp.dict_fields())
+        #~ return self
         
         
-class Hangup(SignalingMessage):
+class CallHangup(SignalingMessage):
     def __init__(self, *args, **kwargs):
         self.seq = [
             ('client_ctx', UUIDField),
             ('call_ctx', UUIDField)]
-            
+        self.type_code = '\x00\x30'    
         BaseMessage.__init__(self, *args, **kwargs)
-            
-class ClientHangupRequest(Hangup):
-    pass
+          
     
-class ServerForwardHangupRequest(Hangup):
-    pass
-    
-class ClientHangupRequestAck(Hangup):
-    pass
-    
-class ServerHangupRequestAck(Hangup):
-    pass
-    
-class ChangeStatus(BaseMessage):
+class CallHangupAck(CallHangup):
     def __init__(self, *args, **kwargs):
-        self.seq = [
-            ('client_ctx', UUIDField),
-            ('status', ByteField)]
+        Hangup.__init__(self, *args, **kwargs)
+        self.type_code = '\x00\x31'
+        
+#~ class ChangeStatus(BaseMessage):
+    #~ def __init__(self, *args, **kwargs):
+        #~ self.seq = [
+            #~ ('client_ctx', UUIDField),
+            #~ ('status', ByteField)]
+        
+        #~ BaseMessage.__init__(self, *args, **kwargs)
+
+class ServerOverloaded(BaseMessage):
+    def __init__(self, *args, **kwargs):
+        self.seq = [('alternate_ip', IPField)]
         
         BaseMessage.__init__(self, *args, **kwargs)
-        
+
 MessageTypes = dict({
-    '\x00\x01': LoginRequest,
-    '\x00\x02': LoginReply,
-    '\x00\x03': Logout,
-    '\x00\x04': KeepAlive,
-    '\x00\x05': KeepAliveAck,
-    '\x00\x06': ClientInvite,
-    '\x00\x07': ClientInviteAck,
-    '\x00\x08': ServerForwardInvite,
-    '\x00\x09': ServerRejectInvite,
-    '\x00\x0a': ServerForwardRing,
-    '\x00\x0b': ClientAnswer,
-    '\x00\x0c': ServerForwardAnswer,
-    '\x00\x0d': ClientRTP,
-    '\x00\x0e': ServerRTPRelay,
-    '\x00\xff': ServerOverloaded,
+
+    '\x00\x01': ShortResponse,
+    '\x00\x02': LoginRequest,
+    '\x00\x03': LoginReply,
+    '\x00\x04': AlternateServerMessage,
+    '\x00\x05': Logout,
+    '\x00\x06': KeepAlive,
+    '\x00\x07': KeepAliveAck,
+
+    '\x00\x10': ClientInvite,
+    '\x00\x11': ServerRejectInvite,
+    '\x00\x12': ServerForwardInvite,
+    '\x00\x13': ClientInviteAck,
+    '\x00\x14': ServerForwardRing,
+    '\x00\x15': ClientAnswer,
+#    '\x00\x16': ServerForwardAnswer,
+    
+    '\x00\x20': ClientRTP,
+#    '\x00\x21': ServerRTPRelay,
+
+    '\x00\x30': CallHangup,
+    '\x00\x31': CallHangupAck,
+    
+    '\x00\xa0': ServerOverloaded
 })
 
 

@@ -1,69 +1,17 @@
 #! /usr/bin/env python
 
-'''
-    **************************************
-    ServerFactory (part of freespeech.py)
-    **************************************
-    
-    Exposes unified intefrace for socket server creation
-    protocols supproted: tcp, udp.
-    
-    public objects:
-        * serve
-        * StreamServer
-        * DatagramServer
-    
-    serve:
-        the function serve() returns the thread instance (context) which the server runs in
-        the last parameter of the function is a callable object which will be called after each recv
-        with the following parameters ((host, port), data)
-
-        examples:
-            the following example print out tcp and udp data that arrives at port 50008
-            
-            # incoming data parser
-            def data_handler(addr, data): 
-                print 'from: %s:%s - %s' % (addr[0], addr[1], data)
-            
-            t1 = serve('tcp', 'localhost', 50008, data_handler)
-            t2 = serve('udp', 'localhost', 50008, data_handler)
-            
-    StreamServer:
-        the class DatagramServer simply listens to udp packets at a given ip address (addr, port)
-        and pass the incoming data plus the address of the sender to a handler is specified
-        the constructor is initialized with 3 parameters: address, port and handler
-        it expose 2 methods: start() and stop()
-        
-        example:
-            udp_srv = DatagramServer('localhost', 50008, lambda addr, data: data)
-            udp_srv.start()     # will open the socket and start the loop
-            udp_srv.stop()       # will stop the loop and close the socket
-        
-    DatagramServer:
-        this class dirived from BaseRequestHandler.
-        this class can be used by either SocketServer.ThreadingTCPServer or SocketServer.ForkingTCPServer 
-        which will attempt to create an instance of it per client.
-        Since I wanted to create an hookable generic server I split between the constructor and the __call__.
-        In fact, I am passing to ThreadingTCPServer or ForkingTCPServer a new instance of it and not the class itself.
-        
-        example:
-            tcp_srv = SocketServer.ThreadingTCPServer(('localhost', 50008), StreamServer(lambda addr, data: data))
-            tcp_srv.serve_forever()
-'''
-
 __author__ = 'Tzury Bar Yochay'
 __version__ = '0.1'
 __license__ = 'GPLv3'
-__all__ = ['StreamServer', 'DatagramServer', 'serve']
+__all__ = ['serve']
 
 import sys, threading, uuid, time
-
-import session
+from threading import Thread
 
 from twisted.internet.protocol import Protocol, DatagramProtocol, ServerFactory
 from twisted.internet import reactor
 
-from threading import Thread
+import session
 from utils import Storage
         
 class TCPServer(Protocol):
@@ -139,31 +87,27 @@ class UDPServer(DatagramProtocol):
 
 
 
-def start_tcp(port):
+def start_tcp():
     id = uuid.uuid4().hex
-    # todo: pass this id to the handler so we don't have to look for it at serverpool.send_to
     tcp_server = TCPServerFactory(id)
     session.servers_pool.add(id, 'tcp', tcp_server)
-    reactor.listenTCP(port, tcp_server())
-    #reactor.run(installSignalHandlers=0)
-    
+    return tcp_server
 
-def start_udp(port):
+def start_udp():
     id = uuid.uuid4().hex
     udp_server = UDPServer()
     session.servers_pool.add(id, 'udp', udp_server)
-    reactor.listenUDP(port, udp_server())
-    #reactor.run(installSignalHandlers=0)
-    
+    return udp_server
 
-def serve(proto, port):    
-    targets = {'tcp': start_tcp,'udp': start_udp}
-    #reactor.run(installSignalHandlers=0)
-    if proto in targets:
-        t = Thread(target = targets[proto], args = (port,))
-        t.start()
-        print 'serving %s at localhost:%s' % (proto, port)
+def serve(listeners):
+    starters = {'tcp': start_tcp,'udp': start_udp}
+    reactor_methods = {
+        'tcp': reactor.__getattribute__('listenTCP'),
+        'udp': reactor.__getattribute__('listenUDP')}
     
-    t = Thread(target = reactor.run, kwargs = {'installSignalHandlers':0})
-    t.start()
+    for proto, port in listeners:
+        print 'serving %s on port %s' % (proto, port)
+        reactor_methods[proto](port, starters[proto]())
+    
+    reactor.run(installSignalHandlers=0)
     

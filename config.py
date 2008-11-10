@@ -35,8 +35,8 @@ ClientStatus = Storage(
 )
     
 Listeners = (
-    ('udp', 'localhost', 50009),
-    ('tcp', 'localhost', 50009),
+    ('udp', 50009),
+    ('tcp', 50009),
 )
 
 
