@@ -57,13 +57,9 @@ class CtxTable(Storage):
     def add_client(self, (ctx_id, ctx_data)):
         self[ctx_id] = ctx_data
         
-    #~ def add_call(self, client_ctx, call_ctx):
-        #~ if client_ctx in self:
-            #~ self[client_ctx].call_ctx = call_ctx
-            
     def clients_ctx(self):
         '''all active clients (the keys)'''
-        return self.keys() #(ctx for ctx in self)
+        return self.keys()
             
     def clients(self):
         '''all active clients (the values)'''
@@ -157,23 +153,6 @@ def remove_old_clients():
             print 'removing inactive client', repr(ctx_id)
             del ctx_table[ctx_id]
         time.sleep(CLIENT_EXPIRE)
-        print 'next loop at remove_ol\'_ladies'
-
-#~ def inbound_queue():
-    #~ while True:
-        #~ try:
-            #~ yield inbound_messages.get(block=0)
-        #~ except Queue.Empty:
-            #~ print 'empty queue'
-            #~ yield None
-            
-#~ def outbound_queue():
-    #~ while True:
-        #~ try:
-            #~ yield outbound_messages.get(block=0)
-        #~ except Queue.Empty:
-            #~ print 'Queue.Empty'
-            #~ yield None
             
 '''             funcitonality not implemented                               '''
 KeepAliveSession = SyncAddressBookSession = ChangeStatusSession = None
@@ -213,7 +192,7 @@ def _filter(request):
     else:
         switch = {
             messages.LoginRequest: login_handler,
-            messages.Logout: login_handler,
+            messages.Logout: logout_handler,
             messages.KeepAlive: KeepAliveSession,
             messages.ChangeStatus: ChangeStatusSession,
         }
@@ -280,7 +259,10 @@ def login_handler(request):
         return login_reply(ctx_id, ctx_data)
     else:
         return deny_login(request)
-        
+
+def logout_handler(request):
+    del ctx_table[request.client_ctx]
+    
 class CallSession(object):
     '''Utility class handles all requests/responses regarding a call session'''
     def handle(self, request):
@@ -311,15 +293,12 @@ class CallSession(object):
             return self._reject(config.Errors.CodecMismatch, request)
         else:
             # create call ctx
-            call_ctx_id, call_ctx = create_call_ctx(request)
-            
+            call_ctx_id, call_ctx = create_call_ctx(request)            
             # mark the caller as in another call session
             ctx_table[caller_ctx].call_ctx = call_ctx
-            
             # send ServerForwardInvite to the calle
             return self._forward_invite(call_ctx, matched_codecs)
-            
-        
+
     def _forward_invite(self, call_ctx, matched_codecs):
         caller_ctx = call_ctx.caller_ctx
         calle_ctx = call_ctx.calle_ctx
@@ -340,9 +319,7 @@ class CallSession(object):
             codec_list = codec_list
         )
         
-        sfi_buffer = sfi.get_buffer()
-        print 'ServerForwardInvite:', repr(sfi_buffer)
-        
+        sfi_buffer = sfi.get_buffer().raw
         return CommMessage(ctx_table.get_addr(calle_ctx), ServerForwardInvite, sfi_buffer)
         
     def _matched_codecs(self, client_codecs):
@@ -365,11 +342,9 @@ class CallSession(object):
                     ctr = ServerForwardRing
                 elif isinstance(msg, ClientAnswer):
                     buf = self._forward_answer(msg)
-                    print 'ServerForwardAnswer::copy_from yields:', repr(buf)
-                    ctr = ServerForwardAnswer
-                
+                    ctr = ServerForwardAnswer                
         else:
-            print 'call is out of context:', repr(call_ctx)
+            print '_handle_signaling: call is out of context', repr(call_ctx)
 
         return ctr and CommMessage(caller_addr, ctr, buf)
         
@@ -383,20 +358,17 @@ class CallSession(object):
             print '>> forwarding an rtp message to', addr
             return CommMessage(addr, ServerRTPRelay, buf)
         else:    
-            print self, '::_handle_rtp: call is out of context'
-            print 'current_call:', repr(request.call_ctx)
-            print 'all calls:', list(ctx_table.calls_ctx())
-            print 'all_clients', ctx_table.keys()
-        
+            print self, '_handle_rtp: call is out of context', repr(call_ctx)
+            
     def _reject(self, reason, request):
         reject = ServerRejectInvite(client_ctx=request.msg.client_ctx, reason=reason)
         return CommMessage(addr, ServerRejectInvite, reject.get_buffer().raw)
         
     # client_answer_to_server_forward_answer
     def _forward_answer(self, ca):
-        #~ sfa = ServerForwardAnswer()
-        #~ sfa.set_values(**ca.dict_fields())
-        return ServerForwardAnswer().copy_from(ca).get_buffer().raw #serialize()
+        sfa = ServerForwardAnswer()
+        sfa.copy_from(ca)
+        return sfa.get_buffer().raw
         
     # client_invite_ack_to_server_forward_ring
     def _forward_invite_ack(self, cia, call_type = CallTypes.ViaProxy):
@@ -408,15 +380,17 @@ class CallSession(object):
             call_type = call_type,
             client_public_ip = cia.client_public_ip.value,
             client_public_port = cia.client_public_port.value)
-        buf = sfr.get_buffer().raw #.serialize()
-        print repr('_forward_invite_ack:'), buf
+        buf = sfr.get_buffer().raw
         return buf
         
 #########################################
 # all module Singletons
 #########################################
 
+# main table which I store all the contexts in
 ctx_table = CtxTable()
+
+# a reference for all the server launched by the reactor
 servers_pool = ServersPool()
 
 # Packer.pack will pack each request into this queue
