@@ -118,7 +118,7 @@ def create_client_context(comm_msg, status=ClientStatus.Unknown):
     addr = comm_msg.addr
     if servers_pool.known_address(addr):
         now = time.time()
-        ctx = Storage (addr=addr, status=status, expire=now + CLIENT_EXPIRE, 
+        ctx = Storage (addr=addr, status=status, expire=now + CLIENT_EXPIRE, # client gets the seconds remaining
             last_keep_alive=now, ctx_id = ctx_id, call_ctx = None, 
             client_name = comm_msg.msg.username.value)
         return (ctx_id, ctx)
@@ -232,9 +232,9 @@ def login_handler(request):
         '''creates login reply and put it in the outbound queue'''
         lr = LoginReply()
         ip, port = ctx_data.addr
-        codecs = Codecs.values()
+        codecs = sorted(Codecs.values())
         lr.set_values(client_ctx=ctx_id, client_public_ip=ip , 
-            client_public_port=port, ctx_expire=ctx_table[ctx_id].expire, 
+            client_public_port=port, ctx_expire=ctx_table[ctx_id].expire - time.time(), 
             num_of_codecs=len(codecs), codec_list=''.join((c for c in codecs)))
         buf = lr.get_buffer()
         print 'login reply', repr(buf)
