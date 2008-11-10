@@ -91,7 +91,6 @@ class Packer(object):
         self.parser = Parser()
         
     def pack(self, client, msg):
-        print 'packing:', msg
         self._recv(client, msg)
         if self.parser.eof(msg):
             # get the whole message
@@ -109,7 +108,7 @@ class Packer(object):
                 print 'packer.pack: not a valid message', msg
             del self.clients[client]
         else:
-            print 'eof not found, waiting for more bytes'
+            print 'packer:eof not found, waiting for more bytes'
             
     # receives the message and store it in the clients[client]
     def _recv(self, client, msg):
@@ -118,5 +117,3 @@ class Packer(object):
             self.clients[client] = msg
         else:
             self.clients[client] = self.clients[client] + msg
-            
-        print 'packer queue:', client, self.clients[client]

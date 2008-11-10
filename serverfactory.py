@@ -56,17 +56,17 @@ __version__ = '0.1'
 __license__ = 'GPLv3'
 __all__ = ['StreamServer', 'DatagramServer', 'serve']
 
-import sys, threading, uuid
+import sys, threading, uuid, time
 
 import session
 
-from twisted.internet.protocol import Protocol, Factory, ServerFactory
+from twisted.internet.protocol import Protocol, DatagramProtocol, ServerFactory
 from twisted.internet import reactor
 
 from threading import Thread
 from utils import Storage
-
-class TcpServer(Protocol):
+        
+class TCPServer(Protocol):
     dataReceivedHandler = session.recv_msg
         
     def connectionMade(self):
@@ -83,9 +83,10 @@ class TcpServer(Protocol):
         print 'connection Lost'
         self.factory.echoers.remove(self)
         
-class TcpServerFactory(ServerFactory):
+
+class TCPServerFactory(ServerFactory):
     def __init__(self, id):
-        self.protocol = TcpServer
+        self.protocol = TCPServer
         self.echoers = []
         self.id = id
         
@@ -100,7 +101,7 @@ class TcpServerFactory(ServerFactory):
     def send_to(self, (host, port), data):
         for e in self.echoers:
             if e.transport.client == (host, port):
-                print 'TcpServerFactory.send_to', (host, port), repr(data)
+                print 'TCPServerFactory.send_to', (host, port), repr(data)
                 e.transport.write(data)
                 return True
                 
@@ -109,28 +110,60 @@ class TcpServerFactory(ServerFactory):
             if e.transport.client == (host, port):
                 return True
 
+class UDPServer(DatagramProtocol):
+    echoers = []
+    dataReceivedHandler = session.recv_msg
+    
+    def __init__(self):
+        pass
+        
+    def __call__(self):
+        return self
+        
+    def startProtocol(self):
+        pass
+        
+    def datagramReceived(self, data, (host, port)):
+        print 'received:', (host, port), data
+        if not (host, port) in self.echoers:
+            self.echoers.append((host, port))
+        
+        self.dataReceivedHandler((host, port), data)
+    
+    def send_to(self, (host, port), data):
+        if self.connected_to((host, port)):
+            self.transport.write(data, (host, port))
+
+    def connected_to(self, (host, port)):
+        return (host, port) in self.echoers
+
+
+
 def start_tcp(port):
     id = uuid.uuid4().hex
     # todo: pass this id to the handler so we don't have to look for it at serverpool.send_to
-    tcp_server = TcpServerFactory(id)
+    tcp_server = TCPServerFactory(id)
     session.servers_pool.add(id, 'tcp', tcp_server)
     reactor.listenTCP(port, tcp_server())
-    reactor.run(installSignalHandlers=0)
+    #reactor.run(installSignalHandlers=0)
+    
 
 def start_udp(port):
-    pass
-    '''id = uuid.uuid4().hex
-    # todo: pass this id to the handler so we don't have to look for it at serverpool.send_to
-    tcp_server = TcpServerFactory(id)
-    session.servers_pool.add(id, 'tcp', tcp_server)
-    reactor.listenTCP(port, tcp_server())
-    reactor.run(installSignalHandlers=0)
-    '''
-def serve(proto, port):
+    id = uuid.uuid4().hex
+    udp_server = UDPServer()
+    session.servers_pool.add(id, 'udp', udp_server)
+    reactor.listenUDP(port, udp_server())
+    #reactor.run(installSignalHandlers=0)
     
+
+def serve(proto, port):    
     targets = {'tcp': start_tcp,'udp': start_udp}
-    
+    #reactor.run(installSignalHandlers=0)
     if proto in targets:
         t = Thread(target = targets[proto], args = (port,))
         t.start()
         print 'serving %s at localhost:%s' % (proto, port)
+    
+    t = Thread(target = reactor.run, kwargs = {'installSignalHandlers':0})
+    t.start()
+    

@@ -26,7 +26,7 @@ class ByteField(Field)
 class CharField(Field)
     represents a single character '!c'
     
-class ShortField (Field)
+class ShortField(Field)
     represents short integer (two bytes) stored within a buffer.
 
 class IntField (Field)
@@ -46,11 +46,11 @@ class Parser(object)
         eof(): returns true if the message ends with the eof bytes
         len(): returns the len as described in the message body (expected length)
         valid(): returns true if message begins and ends correctly and expected 
-                 length == real length
+                length == real length
         body(): returns a tuple (type, body) 
                 body = the message body i.e. without the bof, eof, type and the 
                 length
-
+                
 class Packer(object)
     Receives messages or parts of messages and pack them and put them in 
     the provided queue when they are ready, i.e. message  valid and complete.
@@ -139,7 +139,7 @@ class Field(object):
             self._value = isinstance(v, tuple) and v or (v,)
         else:
             self.__dict__[k] = v
-        
+            
     def __getattr__(self, k):
         '''for single value return tuple[0], otherwise, return the tuple'''
         if k == 'value':

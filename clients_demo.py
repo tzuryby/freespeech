@@ -10,7 +10,6 @@ from messages import *
 from config import Codecs, ClientStatus
 from decorators import printargs
 
-
 class TcpClient(Thread):
     def __init__(self, (host, port), recv_callback = None):
         Thread.__init__(self)
@@ -21,7 +20,7 @@ class TcpClient(Thread):
 
     def send(self, msg):
         self.socket.send(msg)
-                        
+        
     def run(self):
         data = '^#$_@!#$'
         while data:
