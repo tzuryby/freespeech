@@ -252,13 +252,16 @@ class BaseMessage(object):
         self._pack_values()
         return self.buf
         
-    def serialize(self):
+    def serialize(self, frame = False):
         self._pack_values()
-        ret = frame_msg(self.type_code, self.buf.raw)
+        if frame:
+            ret = frame_msg(self.type_code, self.buf.raw)
+        else:
+            ret = self.buf.raw
         return ret
         
     def __repr__(self):
-        return repr(self.serialize())
+        return repr(self.serialize(True))
 
 class ShortResponse(BaseMessage):
     def __init__(self, *args, **kwargs):

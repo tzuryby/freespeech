@@ -147,7 +147,7 @@ def handle_outbound_queue():
             if rep and hasattr(rep, 'msg') and hasattr(rep, 'addr'):
                 print 'server reply or forward a message to', rep.addr
                 try:
-                    data = rep.msg.serialize()
+                    data = rep.msg.serialize(True)
                     reactor.callFromThread(servers_pool.send_to,rep.addr, data)
                 except:
                     print 'error while calling reactor.callFromThread at handle_outbound_queue'
@@ -208,7 +208,7 @@ def login_handler(request):
         lr.set_values(client_ctx=ctx_id, client_public_ip=ip , 
             client_public_port=port, ctx_expire=ctx_table[ctx_id].expire - time.time(), 
             num_of_codecs=len(codecs), codec_list=''.join((c for c in codecs)))
-        buf = lr.get_buffer()
+        buf = lr.serialize(False)
         print 'login reply', repr(buf)
         return CommMessage(request.addr, LoginReply, buf)
         
@@ -218,7 +218,7 @@ def login_handler(request):
         ld.set_values(
             client_ctx = ('\x00 '*16).split(),
             result = struct.unpack('!h', Errors.LoginFailure))
-        buf = ld.get_buffer()
+        buf = ld.serialize(False)
         print 'login error'    
         return CommMessage(request.addr, ShortResponse, buf)
         
@@ -291,7 +291,7 @@ class CallSession(object):
             codec_list = codec_list
         )
         
-        sfi_buffer = sfi.get_buffer().raw
+        sfi_buffer = sfi.serialize(False)
         return CommMessage(ctx_table.get_addr(calle_ctx), ServerForwardInvite, sfi_buffer)
         
     def _matched_codecs(self, client_codecs):
@@ -314,7 +314,7 @@ class CallSession(object):
                     ctr = ServerForwardRing
                 elif isinstance(msg, ClientAnswer):
                     # ClientAnswer is forwarded as is
-                    buf = msg.get_buffer().raw
+                    buf = msg.serialize(False)
                     ctr = ClientAnswer                
         else:
             print '_handle_signaling: call is out of context', repr(call_ctx)
@@ -333,7 +333,7 @@ class CallSession(object):
             
     def _reject(self, reason, request):
         reject = ServerRejectInvite(client_ctx=request.client_ctx, reason=reason)
-        return CommMessage(addr, ServerRejectInvite, reject.get_buffer().raw)
+        return CommMessage(addr, ServerRejectInvite, reject.serialize(False))
         
     def _forward_invite_ack(self, cia, call_type = CallTypes.ViaProxy):
         sfr = ServerForwardRing()
@@ -344,7 +344,7 @@ class CallSession(object):
             call_type = call_type,
             client_public_ip = cia.client_public_ip.value,
             client_public_port = cia.client_public_port.value)
-        buf = sfr.get_buffer().raw
+        buf = sfr.serialize(False)
         return buf
         
 #########################################
