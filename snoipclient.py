@@ -94,7 +94,7 @@ class SnoipClient(object):
         ca = ClientAnswer()
         ca.set_values(client_ctx=self.client_ctx, call_ctx=self.call_ctx, codec=Codecs.values()[0])
         print 'answering a ring of call_ctx:', repr(self.call_ctx)
-        self._send(ca.serialize(True))
+        self._send(ca.pack())
         
     def _send(self, data):
         self.client.send(data)
@@ -102,7 +102,7 @@ class SnoipClient(object):
     def feed_rtp(self, rtp_bytes):
         crtp = ClientRTP()
         crtp.set_values(client_ctx=self.invited_ctx, call_ctx=self.call_ctx, rtp_bytes=rtp_bytes)
-        self._send(crtp.serialize(True))
+        self._send(crtp.pack())
         
     def rtp_received(self, msg):
         bytes = msg.rtp_bytes.value
@@ -136,7 +136,7 @@ def create_invite(ctx, username):
         num_of_codecs = len(Codecs.values()),
         codec_list = ''.join(Codecs.values()))
         
-    return ci.serialize(True)
+    return ci.pack()
     
 def client_invite_ack(invite):
     cia = ClientInviteAck()
@@ -149,5 +149,5 @@ def client_invite_ack(invite):
     )
     
     print 'will ack invite of call_ctx:', repr(invite.call_ctx.value)
-    return cia.serialize(True)
+    return cia.pack()
     

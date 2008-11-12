@@ -241,27 +241,22 @@ class BaseMessage(object):
             start = self.__dict__[key].end
             
     def _pack_values(self):
+        '''packs all the values into the buffer'''
         self._init_buffer()
         for v in self.seq:
             self.__dict__[v[0]].pack_into(self.buf)
         
-    def get_buffer(self):
-        '''returns a writeable buffer which contains the values of the object
-        call buf.raw in order to get the bytes represented as string
-        '''
+    def serialize(self):
+        '''packs all values into the buffer and returns the buffer'''
         self._pack_values()
-        return self.buf
-        
-    def serialize(self, frame = False):
-        self._pack_values()
-        if frame:
-            ret = frame_msg(self.type_code, self.buf.raw)
-        else:
-            ret = self.buf.raw
-        return ret
+        return self.buf.raw
         
     def __repr__(self):
-        return repr(self.serialize(True))
+        return repr(self.pack())
+        
+    def pack(self):
+        '''packs the buffer and make it ready to ship'''
+        return frame_msg(self.type_code, self.serialize())
 
 class ShortResponse(BaseMessage):
     def __init__(self, *args, **kwargs):

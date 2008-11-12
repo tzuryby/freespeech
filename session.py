@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-import time, Queue, struct
+import time, Queue, struct, uuid
 import dblayer, messages, config
 
 from md5 import new as md5
@@ -24,7 +24,8 @@ class ServersPool(Storage):
             if self[id].server.connected_to((host, port)):
                 return True
                 
-    def add(self, id, proto, server):
+    def add(self, proto, server):
+        id = uuid.uuid4().hex
         self[id] = Storage(proto = proto, server=server)
         
 class CtxTable(Storage):
@@ -147,7 +148,7 @@ def handle_outbound_queue():
             if rep and hasattr(rep, 'msg') and hasattr(rep, 'addr'):
                 print 'server reply or forward a message to', rep.addr
                 try:
-                    data = rep.msg.serialize(True)
+                    data = rep.msg.pack()
                     reactor.callFromThread(servers_pool.send_to,rep.addr, data)
                 except:
                     print 'error while calling reactor.callFromThread at handle_outbound_queue'
@@ -165,9 +166,9 @@ def _filter(request):
         switch = {
             messages.LoginRequest: login_handler,
             messages.Logout: logout_handler,
-            messages.KeepAlive: KeepAliveSession,
-#            messages.ChangeStatus: ChangeStatusSession,
-        }
+            messages.KeepAlive: KeepAliveSession 
+            }
+            
         if msg_type in switch:
             _out = switch[msg_type](request)
         elif isinstance(msg, (SignalingMessage, ClientRTP)):
@@ -184,12 +185,10 @@ def touch_client(ctx, time_stamp = time.time(), expire=None):
     if not expire:
         expire = time_stamp + CLIENT_EXPIRE
     
-    print 'touch the glory of', repr(ctx)
-    
     if ctx in ctx_table:
         ctx_table[ctx].last_keep_alive = time_stamp
         ctx_table[ctx].expire = expire
-
+        
 def login_handler(request):
     def verify_login(username, password):
         dbuser = users[unicode(username)]
@@ -208,7 +207,7 @@ def login_handler(request):
         lr.set_values(client_ctx=ctx_id, client_public_ip=ip , 
             client_public_port=port, ctx_expire=ctx_table[ctx_id].expire - time.time(), 
             num_of_codecs=len(codecs), codec_list=''.join((c for c in codecs)))
-        buf = lr.serialize(False)
+        buf = lr.serialize()
         print 'login reply', repr(buf)
         return CommMessage(request.addr, LoginReply, buf)
         
@@ -218,7 +217,7 @@ def login_handler(request):
         ld.set_values(
             client_ctx = ('\x00 '*16).split(),
             result = struct.unpack('!h', Errors.LoginFailure))
-        buf = ld.serialize(False)
+        buf = ld.serialize()
         print 'login error'    
         return CommMessage(request.addr, ShortResponse, buf)
         
@@ -270,7 +269,7 @@ class CallSession(object):
             ctx_table[caller_ctx].call_ctx = call_ctx
             # send ServerForwardInvite to the calle
             return self._forward_invite(call_ctx, matched_codecs)
-
+            
     def _forward_invite(self, call_ctx, matched_codecs):
         caller_ctx = call_ctx.caller_ctx
         calle_ctx = call_ctx.calle_ctx
@@ -291,7 +290,7 @@ class CallSession(object):
             codec_list = codec_list
         )
         
-        sfi_buffer = sfi.serialize(False)
+        sfi_buffer = sfi.serialize()
         return CommMessage(ctx_table.get_addr(calle_ctx), ServerForwardInvite, sfi_buffer)
         
     def _matched_codecs(self, client_codecs):
@@ -314,7 +313,7 @@ class CallSession(object):
                     ctr = ServerForwardRing
                 elif isinstance(msg, ClientAnswer):
                     # ClientAnswer is forwarded as is
-                    buf = msg.serialize(False)
+                    buf = msg.serialize()
                     ctr = ClientAnswer                
         else:
             print '_handle_signaling: call is out of context', repr(call_ctx)
@@ -324,8 +323,9 @@ class CallSession(object):
     def _handle_rtp(self, request):
         call_ctx = ctx_table.find_call(request.call_ctx)
         if call_ctx:
-            forward_to = (call_ctx.caller_ctx == request.client_ctx and call_ctx.calle_ctx) \
-                or request.client_ctx                
+            # get the other party client_ctx
+            forward_to = (call_ctx.caller_ctx == request.client_ctx 
+                and call_ctx.calle_ctx) or request.client_ctx
             request.addr = ctx_table.get_addr(forward_to)
             return request
         else:    
@@ -333,7 +333,7 @@ class CallSession(object):
             
     def _reject(self, reason, request):
         reject = ServerRejectInvite(client_ctx=request.client_ctx, reason=reason)
-        return CommMessage(addr, ServerRejectInvite, reject.serialize(False))
+        return CommMessage(addr, ServerRejectInvite, reject.serialize())
         
     def _forward_invite_ack(self, cia, call_type = CallTypes.ViaProxy):
         sfr = ServerForwardRing()
@@ -344,7 +344,7 @@ class CallSession(object):
             call_type = call_type,
             client_public_ip = cia.client_public_ip.value,
             client_public_port = cia.client_public_port.value)
-        buf = sfr.serialize(False)
+        buf = sfr.serialize()
         return buf
         
 #########################################

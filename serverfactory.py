@@ -5,7 +5,7 @@ __version__ = '0.1'
 __license__ = 'GPLv3'
 
 
-import sys, threading, uuid, time
+import sys, threading, time
 from threading import Thread
 
 from twisted.internet.protocol import Protocol, DatagramProtocol, ServerFactory
@@ -33,14 +33,8 @@ class TCPServer(Protocol):
         
 
 class TCPServerFactory(ServerFactory):
-    def __init__(self, id):
-        self.protocol = TCPServer
-        self.echoers = []
-        self.id = id
-        
-    # I instansiate before passing to reactor.listenTCP thus must have __call__
-    def __call__(self):    
-        return self
+    protocol = TCPServer
+    echoers = []
         
     def send_all(self, data):
         for e in self.echoers:
@@ -62,12 +56,6 @@ class UDPServer(DatagramProtocol):
     echoers = []
     dataReceivedHandler = session.recv_msg
     
-    def __init__(self):
-        pass
-        
-    def __call__(self):
-        return self
-        
     def startProtocol(self):
         pass
         
@@ -84,32 +72,24 @@ class UDPServer(DatagramProtocol):
 
     def connected_to(self, (host, port)):
         return (host, port) in self.echoers
-
-
-
-def start_tcp():
-    id = uuid.uuid4().hex
-    tcp_server = TCPServerFactory(id)
-    session.servers_pool.add(id, 'tcp', tcp_server)
-    return tcp_server
-
-def start_udp():
-    id = uuid.uuid4().hex
-    udp_server = UDPServer()
-    session.servers_pool.add(id, 'udp', udp_server)
-    return udp_server
+        
+        
+start_tcp = TCPServerFactory
+start_udp = UDPServer
 
 def serve(listeners):
     starters = {
         'tcp': start_tcp,
         'udp': start_udp }
     
-    reactor_invoke = {
+    reactor_listen = {
         'tcp': reactor.listenTCP,
         'udp': reactor.listenUDP }
     
     for proto, port in listeners:
-        reactor_invoke[proto](port, starters[proto]())
+        starter = starters[proto]()
+        reactor_listen[proto](port, starter)
+        session.servers_pool.add(proto, starter)
         print 'serving %s on port %s' % (proto, port)
         
     reactor.run(installSignalHandlers=0)
