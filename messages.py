@@ -4,62 +4,6 @@
 **************************************
 messages.py (part of freespeech.py)
 **************************************
-
-Message Frames Structure:
-    A.B.C.D.TYPE.LEN.LEN.BDY.BDY...BDY.BDY.D.C.B.A        
-
-class Field(object)
-    represents a single byte of data stored within a buffer.
-    objects attributes:
-        start - starting point on the buffer,
-        format - the foramt used to pack and unpack,
-        length - the len is the result returned by struct.calcsize(format)
-        end - ending point on the buffer (start + length)
-    object methods:
-        pack_into(buffer) - calls struct.pack_into by passing the supplied buffer and self properties
-        unpack_from(buffer) - calls struct.unpack_from and assign self.value with the results
-        __setattr__ - a wrapper around self.value - at string it assign
-
-class ByteField(Field)
-    represents a single byte (signed char) of data '!b'
-    
-class CharField(Field)
-    represents a single character '!c'
-    
-class ShortField(Field)
-    represents short integer (two bytes) stored within a buffer.
-
-class IntField (Field)
-    represents integer (four bytes) stored within a buffer.
-    
-class StringField (Field)
-    represent a string (variable number of bytes) stored within a buffer
-
-class IPField (Field)
-    represents 16 bytes of data represents within a buffer
-    when using IPv4 only the first four bytes contain data, the rest contain 
-    zeros
-    
-class Parser(object)
-    Provides parsing message utilities
-        bof(): returns true if the message begins with the bof bytes
-        eof(): returns true if the message ends with the eof bytes
-        len(): returns the len as described in the message body (expected length)
-        valid(): returns true if message begins and ends correctly and expected 
-                length == real length
-        body(): returns a tuple (type, body) 
-                body = the message body i.e. without the bof, eof, type and the 
-                length
-                
-class Packer(object)
-    Receives messages or parts of messages and pack them and put them in 
-    the provided queue when they are ready, i.e. message  valid and complete.
-    __init__(self, queue)
-        expect an instanse of Queue.Queue() or any other object that has 'put' 
-        method
-        
-Copyrights - 2008
-
 '''
 
 __author__ = 'Tzury Bar Yochay'
@@ -78,7 +22,7 @@ import struct, uuid
 from ctypes import create_string_buffer
 from md5 import new as md5
 from decorators import printargs
-
+from utils import Storage
 
 def string_to_ctx(*args):
     v = ''.join(args)
@@ -98,7 +42,7 @@ class CommMessage(object):
         self.addr = addr
         self.msg_type = msg_type
         self.body = body
-        self.msg = msg_type(buf=body)        
+        self.msg = msg_type(buf=body)
         self.client_ctx = None
         
         # for login request create new context, for others extract from the message
@@ -122,11 +66,10 @@ class Field(object):
         self.format = format    # pack/unpack format
         self.length = struct.calcsize(self.format)
         self.end = self.start + self.length
-        if name: self.name = name
+        self.name = name
         
     def pack_into(self, buf):
         '''packs the value into a supplied buffer'''
-        #print 'name format start _value:', self.name, self.format, self.start, self._value
         struct.pack_into(self.format, buf, self.start, *self._value)
         
     def unpack_from(self, buf):
@@ -157,7 +100,7 @@ class ByteField(Field):
         Field.__init__(self, start, '!b', name)
         
 class CharField(Field):
-    '''single byte textual field'''
+    '''single byte text field'''
     def __init__(self, start, name=None):
         Field.__init__(self, start, '!c', name)
         
@@ -177,8 +120,8 @@ class StringField(Field):
         try:
             Field.__init__(self, start, format, name)
         except:
-            print 'error@StringField.__init__'
-            print 'start %s, format %s, name %s' %(start, format, name)
+            print 'error@StringField.__init__\nstart %s, format %s, name %s' % (
+                start, format, name)
             
     def __setattr__(self, k, v):
         try:
@@ -191,12 +134,12 @@ class StringField(Field):
             else:
                 self.__dict__[k] = v
         except:
-            print 'error@StringField.__setattr__'
-            print 'name %s, k %s,v %s, format %s, length %s' % (self.name, k, v, self.format, self.length)
+            print 'error@StringField.__setattr__\nname %s, k %s,v %s, format %s, length %s' % (
+                self.name, k, v, self.format, self.length)
             
     def __getattr__(self, k):
         if k == 'value':
-            return self._value[0:] #(c for c in self._value)
+            return self._value[0:]
         else:
             raise AttributeError
             
@@ -214,8 +157,8 @@ class IPField(Field):
         '''a wrapper around x.value'''
         if k == 'value':
             if type(v).__name__ == 'str':
-                v = [int(o) for o in v.split('.')] + [0, 0, 0, 0, 0, 
-                    0, 0, 0, 0, 0, 0, 0]
+                v = [int(o) 
+                    for o in v.split('.')] + [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] # 4+12
                 self._value = v
             else:
                 self._value = v
@@ -228,8 +171,8 @@ class BaseMessage(object):
     
     def __init__(self, *args, **kwargs):        
         if 'buf' in kwargs:
-            self._init_buffer(kwargs['buf'])
-            self.deserialize()
+            #self._init_buffer(kwargs['buf'])
+            self.deserialize(kwargs['buf'])
             
         elif 'length' in kwargs:
             self.buf = create_string_buffer(kwargs['length'])
@@ -265,10 +208,10 @@ class BaseMessage(object):
         self._set_values(items, kwargs)
         
     def dict_fields(self):
+        '''all fields as dict {name: value, ...}'''
         x = dict(
             ((self.__dict__[field[0]].name, 
                     self.__dict__[field[0]].value) for field in self.seq))
-        print 'dict_fields:\n', x
         return x
         
     def _set_values(self, items, values_dict=None):
@@ -285,8 +228,10 @@ class BaseMessage(object):
             # key -> field.name
             args.append(key)
             
+            # set a property as field-name and its value as Field instance.
             self.__dict__[key] = ctr(*args)
             
+            # set the value either to a supplied argument or extract from the buffer
             if values_dict:
                 self.__dict__[key].value = values_dict[key]
             else:
@@ -312,24 +257,9 @@ class BaseMessage(object):
         ret = frame_msg(self.type_code, self.buf.raw)
         return ret
         
-    #~ def buffer_format(self):
-        #~ seq_keys = (f[0] for f in self.seq)
-        #~ formats = (self.__dict__[f].format for f in seq_keys)
-        #~ cleaned = (f.replace('!', '') for f in formats)
-        #~ return '!' + ' '.join(cleaned)
-        
     def __repr__(self):
         return repr(self.serialize())
-'''
-    '\x00\x01': ShortResponse,
-    '\x00\x02': LoginRequest,
-    '\x00\x03': LoginReply,
-    '\x00\x04': AlternateServerMessage,
-    '\x00\x05': Logout,
-    '\x00\x06': KeepAlive,
-    '\x00\x07': KeepAliveAck,
 
-'''        
 class ShortResponse(BaseMessage):
     def __init__(self, *args, **kwargs):
         self.seq = [
@@ -391,18 +321,6 @@ class KeepAliveAck(BaseMessage):
             ('refresh_contact_list', ByteField)]
         self.type_code = '\x00\x07'
         BaseMessage.__init__(self, *args, **kwargs)
-        
-
-'''
-    '\x00\x10': ClientInvite,
-    '\x00\x11': ServerRejectInvite,
-    '\x00\x12': ServerForwardInvite,
-    '\x00\x13': ClientInviteAck,
-    '\x00\x14': ServerForwardRing,
-    '\x00\x15': ClientAnswer,
-    '\x00\x16': ServerForwardAnswer,
-
-'''        
 
 class SignalingMessage(BaseMessage):
     def __init__(self, *args, **kwargs):
@@ -484,25 +402,6 @@ class ClientAnswer(SignalingMessage):
         self.type_code = '\x00\x15'
         SignalingMessage.__init__(self, *args, **kwargs)
         
-#~ class ServerForwardAnswer(SignalingMessage):
-    #~ def __init__(self, *args, **kwargs):
-        #~ self.seq = [
-            #~ ('client_ctx', UUIDField),
-            #~ ('call_ctx', UUIDField),
-            #~ ('codec', CharField)]
-            
-        #~ self.type_code = '\x00\x16'
-        #~ SignalingMessage.__init__(self, *args, **kwargs)
-        
-    #~ def copy_from(self, client_answer):
-        #~ self.set_values(**client_answer.dict_fields())
-        #~ return self
-
-'''
-    '\x00\x20': ClientRTP,
-    '\x00\x21': ServerRTPRelay,
-
-'''
 class ClientRTP(BaseMessage):
     def __init__(self, *args, **kwargs):
         self.seq = [
@@ -512,16 +411,6 @@ class ClientRTP(BaseMessage):
             
         self.type_code = '\x00\x20'
         BaseMessage.__init__(self, *args, **kwargs)
-        
-#~ class ServerRTPRelay(ClientRTP):
-    #~ def __init__(self, *args, **kwargs):
-        #~ ClientRTP.__init__(self, *args, **kwargs)
-        #~ self.type_code = '\x00\x0e'
-        
-    #~ def copy_from(self, client_rtp):
-        #~ self.set_values(**client_rtp.dict_fields())
-        #~ return self
-        
         
 class CallHangup(SignalingMessage):
     def __init__(self, *args, **kwargs):
@@ -537,21 +426,13 @@ class CallHangupAck(CallHangup):
         Hangup.__init__(self, *args, **kwargs)
         self.type_code = '\x00\x31'
         
-#~ class ChangeStatus(BaseMessage):
-    #~ def __init__(self, *args, **kwargs):
-        #~ self.seq = [
-            #~ ('client_ctx', UUIDField),
-            #~ ('status', ByteField)]
-        
-        #~ BaseMessage.__init__(self, *args, **kwargs)
-
 class ServerOverloaded(BaseMessage):
     def __init__(self, *args, **kwargs):
         self.seq = [('alternate_ip', IPField)]
         
         BaseMessage.__init__(self, *args, **kwargs)
 
-MessageTypes = dict({
+MessageTypes = Storage({
 
     '\x00\x01': ShortResponse,
     '\x00\x02': LoginRequest,
@@ -567,10 +448,8 @@ MessageTypes = dict({
     '\x00\x13': ClientInviteAck,
     '\x00\x14': ServerForwardRing,
     '\x00\x15': ClientAnswer,
-#    '\x00\x16': ServerForwardAnswer,
     
     '\x00\x20': ClientRTP,
-#    '\x00\x21': ServerRTPRelay,
 
     '\x00\x30': CallHangup,
     '\x00\x31': CallHangupAck,
@@ -578,15 +457,12 @@ MessageTypes = dict({
     '\x00\xa0': ServerOverloaded
 })
 
-
+def keyof(_v):
+    for k,v in MessageTypes.iteritems():
+        if v == _v:
+            return k
+            
+MessageTypes.keyof = keyof
         
 if __name__ == '__main__':
-    ka =KeepAliveAck()
-    buf = uuid.uuid4().bytes
-    buf += '\x01\x01\x01\x01'
-    ka.deserialize('\xab\xcd\x00\x01\x00\x14' + buf + '\xdc\xba')
-    x = ka.get_buffer()
-    print repr(x.raw)
-    print repr(''.join(ka.client_ctx.value))
-    print ka.expire.value
-    
+    print repr(MessageTypes.kbv(LoginRequest))

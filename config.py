@@ -38,10 +38,3 @@ Listeners = (
     ('udp', 50009),
     ('tcp', 50009),
 )
-
-
-binascii_pipe = False
-
-import binascii
-hexlify = lambda data: binascii_pipe and binascii.hexlify(data) or data
-unhexlify = lambda data: binascii_pipe and binascii.unhexlify(data) or data

@@ -12,8 +12,6 @@ from config import Codecs, ClientStatus
 from decorators import printargs
 
 
-
-
 class TcpClient(Thread):
     def __init__(self, (host, port), recv_callback = None):
         Thread.__init__(self)
@@ -153,7 +151,3 @@ def client_invite_ack(invite):
     print 'will ack invite of call_ctx:', repr(invite.call_ctx.value)
     return cia.serialize()
     
-    
-def hexlify(data):
-    import binascii
-    return binascii.hexlify(data)

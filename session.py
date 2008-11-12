@@ -1,8 +1,5 @@
 #!/usr/bin/env python
 
-'''
-'''
-
 import time, Queue, struct
 import dblayer, messages, config
 
@@ -54,7 +51,7 @@ class CtxTable(Storage):
         for call in self.calls():
             if call.ctx_id == call_ctx:
                 return call
-            
+                
     def get_addr(self, client_ctx):
         '''return the last ip address registered for this client'''
         return client_ctx in self and self[client_ctx].addr
@@ -79,23 +76,22 @@ class CtxTable(Storage):
         '''all connected clients user names and their status (name, status)'''
         return ((self[ctx].client_name, self[ctx].status) for ctx in self)
             
-
 def recv_msg(caller, (host, port), msg):
     '''every server, onDataReceived call this function with the data'''
-    msg = config.unhexlify(msg)
     msg_packer.pack((host, port), msg)
     
 def create_client_context(comm_msg, status=ClientStatus.Unknown):
     '''creates the client context for each new logged in client        
     returns a tuple(ctx_id, client_ctx_data)
     client_ctx_data.keys() =>
-        addr, status, expire, last_keep_alive, socket, proto, socket_id, ctx_id, call_ctx, client_name
+        addr, status, expire, last_keep_alive, socket, proto, 
+        socket_id, ctx_id, call_ctx, client_name
     '''
     ctx_id = comm_msg.client_ctx
     addr = comm_msg.addr
     if servers_pool.known_address(addr):
         now = time.time()
-        ctx = Storage (addr=addr, status=status, expire=now + CLIENT_EXPIRE, # client gets the seconds remaining
+        ctx = Storage (addr=addr, status=status, expire=now + CLIENT_EXPIRE,
             last_keep_alive=now, ctx_id = ctx_id, call_ctx = None, 
             client_name = comm_msg.msg.username.value)
         return (ctx_id, ctx)
@@ -152,7 +148,6 @@ def handle_outbound_queue():
                 print 'server reply or forward a message to', rep.addr
                 try:
                     data = rep.msg.serialize()
-                    data = config.hexlify(data)
                     reactor.callFromThread(servers_pool.send_to,rep.addr, data)
                 except:
                     print 'error while calling reactor.callFromThread at handle_outbound_queue'

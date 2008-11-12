@@ -3,7 +3,7 @@
 __author__ = 'Tzury Bar Yochay'
 __version__ = '0.1'
 __license__ = 'GPLv3'
-__all__ = ['serve']
+
 
 import sys, threading, uuid, time
 from threading import Thread
@@ -100,14 +100,17 @@ def start_udp():
     return udp_server
 
 def serve(listeners):
-    starters = {'tcp': start_tcp,'udp': start_udp}
-    reactor_methods = {
-        'tcp': reactor.__getattribute__('listenTCP'),
-        'udp': reactor.__getattribute__('listenUDP')}
+    starters = {
+        'tcp': start_tcp,
+        'udp': start_udp }
+    
+    reactor_invoke = {
+        'tcp': reactor.listenTCP,
+        'udp': reactor.listenUDP }
     
     for proto, port in listeners:
+        reactor_invoke[proto](port, starters[proto]())
         print 'serving %s on port %s' % (proto, port)
-        reactor_methods[proto](port, starters[proto]())
-    
+        
     reactor.run(installSignalHandlers=0)
     
