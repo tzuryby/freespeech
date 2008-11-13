@@ -4,3 +4,7 @@ import time
 
 sc = SnoipClient(('localhost', 50009))
 sc.login('udi', '0'*20)
+
+time.sleep(3)
+
+sc.send_keep_alive()

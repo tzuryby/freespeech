@@ -74,6 +74,8 @@ class SnoipClient(object):
     def login_reply(self, msg):
         print 'snoipclient-login_reply'
         self.client_ctx = msg.client_ctx.value
+        self.client_public_ip = msg.client_public_ip.value
+        self.client_public_port = msg.client_public_port.value
         
     def invite(self, username):
         print 'snoipclient-invite'
@@ -108,6 +110,14 @@ class SnoipClient(object):
         bytes = msg.rtp_bytes.value
         with open(self.username + '_incoming_rtp', 'a') as f:
             f.write(bytes)
+            
+    def send_keep_alive(self):
+        ka = KeepAlive()
+        ka.set_values( client_ctx = self.client_ctx, 
+            client_public_ip=self.client_public_ip,
+            client_public_port=self.client_public_port)
+            
+        self._send(ka.pack())
         
 def create_login_msg(username, password='0'*20):
     header = '\xab\xcd'

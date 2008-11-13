@@ -75,7 +75,11 @@ class Field(object):
         
     def pack_into(self, buf):
         '''packs the value into a supplied buffer'''
-        struct.pack_into(self.format, buf, self.start, *self._value)
+        try:
+            struct.pack_into(self.format, buf, self.start, *self._value)
+        except Exception, inst:
+            print 'Error @ calling startuct.pack_into with:'
+            print 'format', self.format, 'buffer', repr(buf), 'start', self.start, 'value', self._value
         
     def unpack_from(self, buf):
         '''unpack the value from a supplied buffer'''

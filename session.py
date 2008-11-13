@@ -137,11 +137,7 @@ def remove_old_clients():
             ctx_table.remove_client(ctx_id)
                 
         time.sleep(CLIENT_EXPIRE)
-            
-'''             funcitonality not implemented                               '''
-KeepAliveSession = SyncAddressBookSession = ChangeStatusSession = None
-'''             end-of funcitonality not implemented                        '''
-
+        
 def handle_inbound_queue():
     while True:
         try:
@@ -181,7 +177,7 @@ def _filter(request):
         switch = {
             messages.LoginRequest: login_handler,
             messages.Logout: logout_handler,
-            messages.KeepAlive: KeepAliveSession 
+            messages.KeepAlive: keep_alive_handler 
             }
             
         if msg_type in switch:
@@ -204,6 +200,21 @@ def touch_client(ctx, time_stamp = time.time(), expire=None):
         ctx_table[ctx].last_keep_alive = time_stamp
         ctx_table[ctx].expire = expire
         
+        
+def keep_alive_handler(request):
+    expire = CLIENT_EXPIRE
+    #register last keep alive
+    touch_client(request.client_ctx, time.time(), expire)
+    #reply with keep-alive-ack
+    kaa = KeepAliveAck()
+    
+    kaa.set_values(client_ctx=request.client_ctx,
+        expire = expire,
+        refresh_contact_list = 0
+    )
+    
+    return CommMessage(request.addr, KeepAliveAck, kaa.serialize())
+    
 def login_handler(request):
     def verify_login(username, password):
         dbuser = users[unicode(username)]
