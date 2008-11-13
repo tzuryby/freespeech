@@ -132,10 +132,9 @@ def remove_old_clients():
         now = time.time()
         expired_clients = [client.ctx_id for client in ctx_table.clients() if client.expire < now]
         
-        with rlock():
-            for ctx_id in expired_clients:
-                print 'removing inactive client', repr(ctx_id)
-                ctx_table.remove_client(ctx_id)
+        for ctx_id in expired_clients:
+            print 'removing inactive client', repr(ctx_id)
+            ctx_table.remove_client(ctx_id)
                 
         time.sleep(CLIENT_EXPIRE)
             
