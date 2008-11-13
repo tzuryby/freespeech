@@ -1,6 +1,7 @@
 #!/usr/bin/env python
+from __future__ import with_statement
 
-import time, Queue, struct, uuid
+import time, Queue, struct, uuid, threading
 import dblayer, messages, config
 
 from md5 import new as md5
@@ -11,6 +12,9 @@ from config import *
 from decorators import printargs
 from twisted.internet import reactor
 
+
+
+rlock = lambda: threading.RLock()
 
 class ServersPool(Storage):
     def send_to(self, (host, port), data):
@@ -29,7 +33,12 @@ class ServersPool(Storage):
         
 class CtxTable(Storage):
     def add_client(self, (ctx_id, ctx_data)):
-        self[ctx_id] = ctx_data
+        with rlock():
+            self[ctx_id] = ctx_data
+            
+    def remove_client(self, ctx_id):
+        with rlock():
+            del self[ctx_id]
         
     def clients_ctx(self):
         '''all active clients (the keys)'''
@@ -122,9 +131,12 @@ def remove_old_clients():
     while True:
         now = time.time()
         expired_clients = [client.ctx_id for client in ctx_table.clients() if client.expire < now]
-        for ctx_id in expired_clients:
-            print 'removing inactive client', repr(ctx_id)
-            del ctx_table[ctx_id]
+        
+        with rlock():
+            for ctx_id in expired_clients:
+                print 'removing inactive client', repr(ctx_id)
+                ctx_table.remove_client(ctx_id)
+                
         time.sleep(CLIENT_EXPIRE)
             
 '''             funcitonality not implemented                               '''
@@ -236,7 +248,8 @@ def login_handler(request):
         return deny_login(request)
 
 def logout_handler(request):
-    del ctx_table[request.client_ctx]
+    with rlock():
+        ctx_table.remove_client(request.client_ctx)
     
 class CallSession(object):
     '''Utility class handles all requests/responses regarding a call session'''
