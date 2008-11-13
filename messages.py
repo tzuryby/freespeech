@@ -9,7 +9,7 @@ messages.py (part of freespeech.py)
 __author__ = 'Tzury Bar Yochay'
 __version__ = '0.1'
 __license__ = 'GPLv3'
-__all__ = ['BaseMessage', 'ByteField', 'CharField', 'ClientAnswer', 
+__all__ = ['MessageFramer', 'BaseMessage', 'ByteField', 'CharField', 'ClientAnswer', 
     'CallHangup', 'CallHangupAck', 'ClientInvite', 'ClientInviteAck', 
     'ClientRTP', 'CommMessage', 'Field', 'IPField', 'IntField', 'KeepAlive', 
     'KeepAliveAck', 'LoginReply', 'LoginRequest', 'Logout', 'SignalingMessage', 
@@ -28,11 +28,16 @@ def string_to_ctx(*args):
     v = ''.join(args)
     return md5(v).digest()
 
-def frame_msg(type_code, buf):
+class MessageFramer(object):
     BOF, EOF = '\xab\xcd', '\xdc\xba'
-    length = struct.pack('!h', len(buf))
-    return ''.join([BOF, type_code, length, buf, EOF])
+    TYPE_POS, LEN_POS = (2,4) , (4, 6)
+    BOF_LEN, EOF_LEN = len(BOF), len(EOF)
+    
+    def frame(self, type_code, buf):
+        length = struct.pack('!h', len(buf))
+        return ''.join([self.BOF, type_code, length, buf, self.EOF])
 
+message_framer = MessageFramer()
 
 class CommMessage(object):
     '''Wrapping message with additional data.
@@ -171,12 +176,13 @@ class BaseMessage(object):
     
     def __init__(self, *args, **kwargs):        
         if 'buf' in kwargs:
-            #self._init_buffer(kwargs['buf'])
             self.deserialize(kwargs['buf'])
             
         elif 'length' in kwargs:
             self.buf = create_string_buffer(kwargs['length'])
             
+        self.type_code = MessageTypes.keyof(self)
+        
     def _init_buffer(self, newbuffer=None):
         if not self.buf and not newbuffer:
             length = sum((self.__dict__[field[0]].length for field in self.seq))
@@ -256,14 +262,14 @@ class BaseMessage(object):
         
     def pack(self):
         '''packs the buffer and make it ready to ship'''
-        return frame_msg(self.type_code, self.serialize())
+        return message_framer.frame(self.type_code, self.serialize())
 
 class ShortResponse(BaseMessage):
     def __init__(self, *args, **kwargs):
         self.seq = [
             ('client_ctx', UUIDField),
             ('result', ShortField)]
-        self.type_code = '\x00\x01'
+        #self.type_code = '\x00\x01'
         BaseMessage.__init__(self, *args, **kwargs)
         
 class LoginRequest(BaseMessage):    
@@ -275,7 +281,7 @@ class LoginRequest(BaseMessage):
             ('local_ip', IPField), 
             ('local_port', IntField)]
             
-        self.type_code = '\x00\x02'
+        #self.type_code = '\x00\x02'
         BaseMessage.__init__(self, *args, **kwargs)
         
 class LoginReply(BaseMessage):
@@ -288,17 +294,18 @@ class LoginReply(BaseMessage):
             ('num_of_codecs', ByteField),
             ('codec_list', StringField, lambda: '!%dc' % self.num_of_codecs.value)]
             
-        self.type_code = '\x00\x03'
+        #self.type_code = '\x00\x03'
         BaseMessage.__init__(self, *args, **kwargs)
 
 class AlternateServerMessage(BaseMessage):
-    type_code = '\x00\x04'
+    #type_code = '\x00\x04'
+    pass
 
     
 class Logout(BaseMessage):
     def __init__(self, *args, **kwargs):
         self.seq = [('client_ctx', UUIDField)]
-        self.type_code = '\x00\x05'
+        #self.type_code = '\x00\x05'
         BaseMessage.__init__(self, *args, **kwargs)
 
     
@@ -308,7 +315,7 @@ class KeepAlive(BaseMessage):
             ('client_ctx', UUIDField),
             ('client_public_ip', IPField),
             ('client_public_port', IntField)]
-        self.type_code = '\x00\x06'
+        #self.type_code = '\x00\x06'
         BaseMessage.__init__(self, *args, **kwargs)
 
 class KeepAliveAck(BaseMessage):
@@ -317,7 +324,7 @@ class KeepAliveAck(BaseMessage):
             ('client_ctx', UUIDField),
             ('expire', IntField),
             ('refresh_contact_list', ByteField)]
-        self.type_code = '\x00\x07'
+        #self.type_code = '\x00\x07'
         BaseMessage.__init__(self, *args, **kwargs)
 
 class SignalingMessage(BaseMessage):
@@ -333,7 +340,7 @@ class ClientInvite(SignalingMessage):
             ('num_of_codecs', ByteField),
             ('codec_list', StringField, lambda: '!%dc' % self.num_of_codecs.value)]
             
-        self.type_code = '\x00\x10'
+        #self.type_code = '\x00\x10'
         SignalingMessage.__init__(self, *args, **kwargs)
         
 class ServerRejectInvite(ShortResponse):
@@ -345,7 +352,7 @@ class ServerRejectInvite(ShortResponse):
         else:
             raise 'Incorrect parameters'
             
-        self.type_code = '\x00\x11'
+        #self.type_code = '\x00\x11'
 
 class ServerForwardInvite(SignalingMessage):
     def __init__(self, *args, **kwargs):
@@ -360,7 +367,7 @@ class ServerForwardInvite(SignalingMessage):
             ('num_of_codecs', ByteField),
             ('codec_list', StringField, lambda: '!%dc' % self.num_of_codecs.value)]
             
-        self.type_code = '\x00\x12'
+        #self.type_code = '\x00\x12'
         SignalingMessage.__init__(self, *args, **kwargs)
         
 class ClientInviteAck(SignalingMessage):
@@ -372,7 +379,7 @@ class ClientInviteAck(SignalingMessage):
             ('client_public_ip', IPField),
             ('client_public_port', IntField)]
         
-        self.type_code = '\x00\x13'
+        #self.type_code = '\x00\x13'
         
         SignalingMessage.__init__(self, *args, **kwargs)
         
@@ -386,7 +393,7 @@ class ServerForwardRing(SignalingMessage):
             ('client_public_ip', IPField),
             ('client_public_port', IntField)]
             
-        self.type_code = '\x00\x14'
+        #self.type_code = '\x00\x14'
         
         SignalingMessage.__init__(self, *args, **kwargs)
     
@@ -397,7 +404,7 @@ class ClientAnswer(SignalingMessage):
             ('call_ctx', UUIDField),
             ('codec', CharField)]
             
-        self.type_code = '\x00\x15'
+        #self.type_code = '\x00\x15'
         SignalingMessage.__init__(self, *args, **kwargs)
         
 class ClientRTP(BaseMessage):
@@ -407,7 +414,7 @@ class ClientRTP(BaseMessage):
             ('call_ctx', UUIDField),
             ('rtp_bytes', StringField, '!%dc' % (32))]
             
-        self.type_code = '\x00\x20'
+        #self.type_code = '\x00\x20'
         BaseMessage.__init__(self, *args, **kwargs)
         
 class CallHangup(SignalingMessage):
@@ -415,14 +422,14 @@ class CallHangup(SignalingMessage):
         self.seq = [
             ('client_ctx', UUIDField),
             ('call_ctx', UUIDField)]
-        self.type_code = '\x00\x30'    
+        #self.type_code = '\x00\x30'    
         BaseMessage.__init__(self, *args, **kwargs)
           
     
 class CallHangupAck(CallHangup):
     def __init__(self, *args, **kwargs):
         Hangup.__init__(self, *args, **kwargs)
-        self.type_code = '\x00\x31'
+        #self.type_code = '\x00\x31'
         
 class ServerOverloaded(BaseMessage):
     def __init__(self, *args, **kwargs):
@@ -457,7 +464,7 @@ MessageTypes = Storage({
 
 def keyof(_v):
     for k,v in MessageTypes.iteritems():
-        if v == _v:
+        if isinstance(_v, v):
             return k
             
 MessageTypes.keyof = keyof

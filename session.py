@@ -14,19 +14,18 @@ from twisted.internet import reactor
 
 class ServersPool(Storage):
     def send_to(self, (host, port), data):
-        for id in self:
-            if self[id].server.connected_to((host, port)):
-                self[id].server.send_to((host, port), data)
+        for id, listener in self.iteritems():
+            if listener.server.connected_to((host, port)):
+                listener.server.send_to((host, port), data)
                 return
                 
     def known_address(self, (host, port)):
-        for id in self:
-            if self[id].server.connected_to((host, port)):
+        for id, listener in self.iteritems():
+            if listener.server.connected_to((host, port)):
                 return True
                 
     def add(self, proto, server):
-        id = uuid.uuid4().hex
-        self[id] = Storage(proto = proto, server=server)
+        self[uuid.uuid4().hex] = Storage(proto = proto, server=server)
         
 class CtxTable(Storage):
     def add_client(self, (ctx_id, ctx_data)):
@@ -141,17 +140,22 @@ def handle_inbound_queue():
         except Queue.Empty:
             time.sleep(0.010)
         
+def fooo():
+    print 'I was just called on dury from reactor.threading'
+    
 def handle_outbound_queue():
     while True:
         try:
-            rep = outbound_messages.get(block=0)
-            if rep and hasattr(rep, 'msg') and hasattr(rep, 'addr'):
-                print 'server reply or forward a message to', rep.addr
+            reply = outbound_messages.get(block=0)
+            if reply and hasattr(reply, 'msg') and hasattr(reply, 'addr'):
+                print 'server reply or forward a message to', reply.addr
                 try:
-                    data = rep.msg.pack()
-                    reactor.callFromThread(servers_pool.send_to,rep.addr, data)
-                except:
+                    data = reply.msg.pack()
+                    reactor.callFromThread(servers_pool.send_to,reply.addr, data)
+                except Exception, inst:
                     print 'error while calling reactor.callFromThread at handle_outbound_queue'
+                    print Exception, inst
+                    
         except Queue.Empty:
             time.sleep(0.010)
         

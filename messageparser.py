@@ -45,27 +45,28 @@ MessageFactory = Storage(
     create= lambda msg_type, buf: msg_type in MessageTypes and MessageTypes[msg_type](buf=buf) or None )
 
 class Parser(object):
+    #framer = MessageFramer()
     '''Provides parsing message utilities'''
-    BOF, EOF = '\xab\xcd', '\xdc\xba'
-    typos, lenpos = (2,4) , (4, 6)
-    boflen, eoflen = len(BOF), len(EOF)
+    #~ BOF, EOF = '\xab\xcd', '\xdc\xba'
+    #~ typos, lenpos = (2,4) , (4, 6)
+    #~ boflen, eoflen = len(BOF), len(EOF)
     
     def __init__(self):
-        pass
+        self.framer = MessageFramer()
         
     def parse_type(self, msg):
-        t = msg[self.typos[0]:self.typos[1]]
+        t = msg[self.framer.TYPE_POS[0]:self.framer.TYPE_POS[1]]
         return t in MessageTypes and t
         
     def bof(self, msg):
-        return self.BOF == msg[:self.boflen]
+        return self.framer.BOF == msg[:self.framer.BOF_LEN]
         
     def eof(self, msg):
-        return self.EOF == msg[-self.eoflen:]
+        return self.framer.EOF == msg[-self.framer.EOF_LEN:]
 
     def length(self, msg):
         try:
-            return struct.unpack('!h', msg[self.lenpos[0]:self.lenpos[1]])[0]
+            return struct.unpack('!h', msg[self.framer.LEN_POS[0]:self.framer.LEN_POS[1]])[0]
         except:
             return -1
         
@@ -74,7 +75,7 @@ class Parser(object):
         
     def _body(self, msg):
         buf = create_string_buffer(self.length(msg))
-        buf.raw = msg[self.lenpos[1] : -self.eoflen]
+        buf.raw = msg[self.framer.LEN_POS[1] : -self.framer.EOF_LEN]
         return buf
         
     def body(self, msg):
