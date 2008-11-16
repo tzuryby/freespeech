@@ -5,7 +5,6 @@ import time, Queue, struct, uuid, threading
 import dblayer, messages, config
 
 from md5 import new as md5
-from messageparser import Packer
 from messages import *
 from utils import Storage
 from config import *
@@ -15,6 +14,41 @@ from twisted.internet import reactor
 
 
 rlock = lambda: threading.RLock()
+
+class Packer(object):
+    '''Packs parts of message into a message and enqueue it'''
+    def __init__(self, queue):
+        self.clients = dict()
+        self.queue = queue
+        self.parser = Parser()
+        
+    def pack(self, client, msg):
+        self._recv(client, msg)
+        if self.parser.eof(msg):
+            # get the whole message
+            msg = self.clients[client]
+            if self.parser.valid(msg):
+                msg_type, buf = self.parser.body(self.clients[client])
+                if msg_type in MessageTypes:
+                    msg_type = MessageTypes[msg_type]
+                    cm = CommMessage(client, msg_type, buf)
+                    self.queue.put(cm)
+                else:
+                    print 'Unknown message type: %s', message_type 
+                    
+            else:
+                print 'packer.pack: not a valid message', msg
+            del self.clients[client]
+        else:
+            print 'packer:eof not found, waiting for more bytes'
+            
+    # receives the message and store it in the clients[client]
+    def _recv(self, client, msg):
+        # new client or new message
+        if (client not in self.clients or self.parser.bof(msg)):
+            self.clients[client] = msg
+        else:
+            self.clients[client] = self.clients[client] + msg
 
 class ServersPool(Storage):
     def send_to(self, (host, port), data):

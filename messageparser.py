@@ -41,80 +41,76 @@ from utils import Storage
 from messages import *
 
 
-MessageFactory = Storage(
-    create= lambda msg_type, buf: msg_type in MessageTypes and MessageTypes[msg_type](buf=buf) or None )
+#~ MessageFactory = Storage(
+    #~ create= lambda msg_type, buf: msg_type in MessageTypes and MessageTypes[msg_type](buf=buf) or None )
 
-class Parser(object):
-    #framer = MessageFramer()
-    '''Provides parsing message utilities'''
-    #~ BOF, EOF = '\xab\xcd', '\xdc\xba'
-    #~ typos, lenpos = (2,4) , (4, 6)
-    #~ boflen, eoflen = len(BOF), len(EOF)
-    
-    def __init__(self):
-        self.framer = MessageFramer()
+#~ class Parser(object):
+    #~ def __init__(self):
+        #~ self.framer = MessageFramer()
         
-    def parse_type(self, msg):
+    #~ def parse_type(self, msg):
+        #~ return self.framer.parse_type(msg)
+        #~ '''parses the type (bytes of typecode)'''
         t = msg[self.framer.TYPE_POS[0]:self.framer.TYPE_POS[1]]
         return t in MessageTypes and t
         
-    def bof(self, msg):
-        return self.framer.BOF == msg[:self.framer.BOF_LEN]
+    #~ def bof(self, msg):
+        #~ return self.framer.BOF == msg[:self.framer.BOF_LEN]
         
-    def eof(self, msg):
-        return self.framer.EOF == msg[-self.framer.EOF_LEN:]
+    #~ def eof(self, msg):
+        #~ return self.framer.EOF == msg[-self.framer.EOF_LEN:]
 
-    def length(self, msg):
-        try:
-            return struct.unpack('!h', msg[self.framer.LEN_POS[0]:self.framer.LEN_POS[1]])[0]
-        except:
-            return -1
+    #~ def length(self, msg):
+        #~ try:
+            #~ return struct.unpack('!h', msg[self.framer.LEN_POS[0]:self.framer.LEN_POS[1]])[0]
+        #~ except:
+            #~ return -1
         
-    def valid(self, msg):
-        return self.bof(msg) and self.eof(msg) and self.length(msg) == len(self._body(msg))
+    #~ def valid(self, msg):
+        #~ return self.bof(msg) and self.eof(msg) and self.length(msg) == len(self._body(msg))
         
-    def _body(self, msg):
-        buf = create_string_buffer(self.length(msg))
-        buf.raw = msg[self.framer.LEN_POS[1] : -self.framer.EOF_LEN]
-        return buf
+    #~ def _body(self, msg):
+        #~ buf = create_string_buffer(self.length(msg))
+        #~ buf.raw = msg[self.framer.LEN_POS[1] : -self.framer.EOF_LEN]
+        #~ return buf
         
-    def body(self, msg):
-        if self.valid(msg):
-            return (self.parse_type(msg), self._body(msg))
-        else:
-            return None
+    #~ def body(self, msg):
+        #~ if self.valid(msg):
+            #~ return (self.parse_type(msg), self._body(msg))
+        #~ else:
+            #~ return None
 
-class Packer(object):
-    '''Packs parts of message into a message and enqueue it'''
-    def __init__(self, queue):
-        self.clients = dict()
-        self.queue = queue
-        self.parser = Parser()
+#~ class Packer(object):
+    #~ '''Packs parts of message into a message and enqueue it'''
+    #~ def __init__(self, queue):
+        #~ self.clients = dict()
+        #~ self.queue = queue
+        #~ self.parser = Parser()
         
-    def pack(self, client, msg):
-        self._recv(client, msg)
-        if self.parser.eof(msg):
-            # get the whole message
-            msg = self.clients[client]
-            if self.parser.valid(msg):
-                msg_type, buf = self.parser.body(self.clients[client])
-                if msg_type in MessageTypes:
-                    msg_type = MessageTypes[msg_type]
-                    cm = CommMessage(client, msg_type, buf)
-                    self.queue.put(cm)
-                else:
-                    print 'Unknown message type: %s', message_type 
+    #~ def pack(self, client, msg):
+        #~ self._recv(client, msg)
+        #~ if self.parser.eof(msg):
+            #~ # get the whole message
+            #~ msg = self.clients[client]
+            #~ if self.parser.valid(msg):
+                #~ msg_type, buf = self.parser.body(self.clients[client])
+                #~ if msg_type in MessageTypes:
+                    #~ msg_type = MessageTypes[msg_type]
+                    #~ cm = CommMessage(client, msg_type, buf)
+                    #~ self.queue.put(cm)
+                #~ else:
+                    #~ print 'Unknown message type: %s', message_type 
                     
-            else:
-                print 'packer.pack: not a valid message', msg
-            del self.clients[client]
-        else:
-            print 'packer:eof not found, waiting for more bytes'
+            #~ else:
+                #~ print 'packer.pack: not a valid message', msg
+            #~ del self.clients[client]
+        #~ else:
+            #~ print 'packer:eof not found, waiting for more bytes'
             
-    # receives the message and store it in the clients[client]
-    def _recv(self, client, msg):
-        # new client or new message
-        if (client not in self.clients or self.parser.bof(msg)):
-            self.clients[client] = msg
-        else:
-            self.clients[client] = self.clients[client] + msg
+    #~ # receives the message and store it in the clients[client]
+    #~ def _recv(self, client, msg):
+        #~ # new client or new message
+        #~ if (client not in self.clients or self.parser.bof(msg)):
+            #~ self.clients[client] = msg
+        #~ else:
+            #~ self.clients[client] = self.clients[client] + msg

@@ -5,7 +5,6 @@ import struct
 import time
 import Queue
 
-from messageparser import Packer, Parser
 from threading import Thread
 from messages import *
 from config import Codecs, ClientStatus

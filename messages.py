@@ -9,7 +9,7 @@ messages.py (part of freespeech.py)
 __author__ = 'Tzury Bar Yochay'
 __version__ = '0.1'
 __license__ = 'GPLv3'
-__all__ = ['MessageFramer', 'BaseMessage', 'ByteField', 'CharField', 'ClientAnswer', 
+__all__ = ['Parser', 'MessageFramer', 'BaseMessage', 'ByteField', 'CharField', 'ClientAnswer', 
     'CallHangup', 'CallHangupAck', 'ClientInvite', 'ClientInviteAck', 
     'ClientRTP', 'CommMessage', 'Field', 'IPField', 'IntField', 'KeepAlive', 
     'KeepAliveAck', 'LoginReply', 'LoginRequest', 'Logout', 'SignalingMessage', 
@@ -28,6 +28,46 @@ def string_to_ctx(*args):
     v = ''.join(args)
     return md5(v).digest()
 
+
+
+MessageFactory = Storage(
+    create= lambda msg_type, buf: msg_type in MessageTypes and MessageTypes[msg_type](buf=buf) or None )
+
+class Parser(object):
+    def __init__(self):
+        self.framer = MessageFramer()
+        
+    def parse_type(self, msg):
+        '''parses the type (bytes of typecode)'''
+        t = msg[self.framer.TYPE_POS[0]:self.framer.TYPE_POS[1]]
+        return t in MessageTypes and t
+        
+    def bof(self, msg):
+        return self.framer.BOF == msg[:self.framer.BOF_LEN]
+        
+    def eof(self, msg):
+        return self.framer.EOF == msg[-self.framer.EOF_LEN:]
+
+    def length(self, msg):
+        try:
+            return struct.unpack('!h', msg[self.framer.LEN_POS[0]:self.framer.LEN_POS[1]])[0]
+        except:
+            return -1
+        
+    def valid(self, msg):
+        return self.bof(msg) and self.eof(msg) and self.length(msg) == len(self._body(msg))
+        
+    def _body(self, msg):
+        buf = create_string_buffer(self.length(msg))
+        buf.raw = msg[self.framer.LEN_POS[1] : -self.framer.EOF_LEN]
+        return buf
+        
+    def body(self, msg):
+        if self.valid(msg):
+            return (self.parse_type(msg), self._body(msg))
+        else:
+            return None
+
 class MessageFramer(object):
     BOF, EOF = '\xab\xcd', '\xdc\xba'
     TYPE_POS, LEN_POS = (2,4) , (4, 6)
@@ -36,7 +76,7 @@ class MessageFramer(object):
     def frame(self, type_code, buf):
         length = struct.pack('!h', len(buf))
         return ''.join([self.BOF, type_code, length, buf, self.EOF])
-
+        
 message_framer = MessageFramer()
 
 class CommMessage(object):
