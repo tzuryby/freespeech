@@ -16,7 +16,7 @@ from twisted.internet import reactor
 rlock = lambda: threading.RLock()
 
 class Packer(object):
-    '''Packs parts of message into a message and enqueue it'''
+    '''Packs parts of message into a message object and enqueue it'''
     def __init__(self, queue):
         self.clients = dict()
         self.queue = queue
@@ -29,18 +29,15 @@ class Packer(object):
             msg = self.clients[client]
             if self.parser.valid(msg):
                 msg_type, buf = self.parser.body(self.clients[client])
-                if msg_type in MessageTypes:
-                    msg_type = MessageTypes[msg_type]
-                    cm = CommMessage(client, msg_type, buf)
-                    self.queue.put(cm)
-                else:
-                    print 'Unknown message type: %s', message_type 
-                    
+                ctr = MessageTypes[msg_type]
+                cm = CommMessage(client, ctr, buf)
+                self.queue.put(cm)                    
             else:
-                print 'packer.pack: not a valid message', msg
+                print 'Packer.pack() >>> not a valid message', msg
+            
             del self.clients[client]
         else:
-            print 'packer:eof not found, waiting for more bytes'
+            print 'Packer.pack() >>> eof not found, waiting for more bytes'
             
     # receives the message and store it in the clients[client]
     def _recv(self, client, msg):
@@ -50,6 +47,7 @@ class Packer(object):
         else:
             self.clients[client] = self.clients[client] + msg
 
+'''a pool of all the listeners (tcp+udp) and thier known clients'''
 class ServersPool(Storage):
     def send_to(self, (host, port), data):
         for id, listener in self.iteritems():
@@ -58,6 +56,7 @@ class ServersPool(Storage):
                 return
                 
     def known_address(self, (host, port)):
+        '''returns true if found a server which is connected to the client at the specified address'''
         for id, listener in self.iteritems():
             if listener.server.connected_to((host, port)):
                 return True
@@ -71,6 +70,7 @@ class CtxTable(Storage):
             self[ctx_id] = ctx_data
             
     def remove_client(self, ctx_id):
+        '''todo: cehck if need to clean the the call record at the other party'''
         with rlock():
             del self[ctx_id]
         

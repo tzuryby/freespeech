@@ -55,7 +55,10 @@ class Parser(object):
             return -1
         
     def valid(self, msg):
-        return self.bof(msg) and self.eof(msg) and self.length(msg) == len(self._body(msg))
+        return self.bof(msg) \
+                and self.eof(msg) \
+                and self.length(msg) == len(self._body(msg)) \
+                and self.parse_type(msg)
         
     def _body(self, msg):
         buf = create_string_buffer(self.length(msg))
@@ -81,7 +84,7 @@ message_framer = MessageFramer()
 
 class CommMessage(object):
     '''Wrapping message with additional data.
-    Encapsulates the address, the type and the context for the message
+    Encapsulates the address, the type (ctr) and the context for the message
     '''
     def __init__(self, addr, msg_type, body):
         self.addr = addr
