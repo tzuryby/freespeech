@@ -3,7 +3,7 @@
 
 from __future__ import with_statement
 
-import time, Queue, struct, uuid, threading
+import time, Queue, struct, uuid, threading, sys, traceback
 import dblayer, messages, config
 
 from md5 import new as md5
@@ -43,7 +43,7 @@ class Packer(object):
             else:
                 print 'Packer.pack() >>> eof not found, waiting for more bytes'
         except:
-            print "Unexpected error:", sys.exc_info()[0]
+            traceback.print_exc()
             
     # receives the message and store it in the clients[client]
     def _recv(self, client, msg):
@@ -54,7 +54,7 @@ class Packer(object):
             else:
                 self.clients[client] = self.clients[client] + msg
         except:
-            print "Unexpected error:", sys.exc_info()[0]
+            traceback.print_exc()
 
 '''a pool of all the listeners (tcp+udp) and thier known clients'''
 class ServersPool(Storage):
@@ -133,7 +133,7 @@ def recv_msg(caller, (host, port), msg):
         '''every server, onDataReceived call this function with the data'''
         msg_packer.pack((host, port), msg)
     except:
-        print "Unexpected error:", sys.exc_info()[0]
+        traceback.print_exc()
             
 def create_client_context(comm_msg, status=ClientStatus.Unknown):
     try:
@@ -154,7 +154,7 @@ def create_client_context(comm_msg, status=ClientStatus.Unknown):
         else:
             return None
     except:
-        print "Unexpected error:", sys.exc_info()[0]
+        traceback.print_exc()
             
 def create_call_ctx(request):
     try:
@@ -177,7 +177,7 @@ def create_call_ctx(request):
         )
         return (ctx_id, ctx)
     except:
-        print "Unexpected error:", sys.exc_info()[0]
+        traceback.print_exc()
     
 def remove_old_clients():
     try:
@@ -197,7 +197,7 @@ def remove_old_clients():
                 
         print 'terminating thread: remove_old_clients'
     except:
-        print "Unexpected error:", sys.exc_info()[0]
+        traceback.print_exc()
     
 def handle_inbound_queue():
     try:
@@ -211,7 +211,7 @@ def handle_inbound_queue():
                 
         print 'terminating thread: handle_inbound_queue'
     except:
-        print "Unexpected error:", sys.exc_info()[0]
+        traceback.print_exc()
         
 def handle_outbound_queue():
     while thread_loop_active:
@@ -229,7 +229,7 @@ def handle_outbound_queue():
         except Queue.Empty:
             time.sleep(0.010)
         except:
-            print "Unexpected error:", sys.exc_info()[0]
+            traceback.print_exc()
             
     print 'terminating thread: handle_outbound_queue'
     
@@ -238,11 +238,12 @@ def _filter(request):
         _out = None
         msg = request.msg
         msg_type = request.msg_type
-        ctx = hasattr(msg, 'client_ctx') and msg.client_ctx.value    
+        ctx = hasattr(msg, 'client_ctx') and msg.client_ctx.value
+        
         if not ctx and msg_type != LoginRequest:
-            _out = None
+            print 'filter is throwing away unknown msg_type/client_ctx: %s, %s, %s'  %(repr(ctx), repr(msg_type), repr(msg))
             
-        elif ctx in ctx_tabls.clients_ctx():
+        elif ctx in ctx_table.clients_ctx():
             switch = {
                 messages.LoginRequest: login_handler,
                 messages.Logout: logout_handler,
@@ -251,19 +252,16 @@ def _filter(request):
                 
             if msg_type in switch:
                 _out = switch[msg_type](request)
+                
             elif isinstance(msg, (SignalingMessage, ClientRTP)):
                 _out = call_session_handler(request)
-        else:
-            _out = None
-            
-        if not _out:
-            print 'filter is throwing away unknown msg_type/client_ctx: %s, %s, %s'  %(repr(ctx), repr(msg_type), repr(msg))
-        else:
+                
+        if _out:
             outbound_messages.put(_out)
             if ctx:
                 touch_client(request.client_ctx)
     except:
-        print "Unexpected error:", sys.exc_info()[0]
+        traceback.print_exc()
         
 def touch_client(ctx, time_stamp = time.time(), expire=None):
     try:
@@ -274,7 +272,7 @@ def touch_client(ctx, time_stamp = time.time(), expire=None):
             ctx_table[ctx].last_keep_alive = time_stamp
             ctx_table[ctx].expire = expire
     except:
-        print "Unexpected error:", sys.exc_info()[0]        
+        traceback.print_exc()        
         
 def keep_alive_handler(request):
     try:
@@ -291,7 +289,7 @@ def keep_alive_handler(request):
         
         return CommMessage(request.addr, KeepAliveAck, kaa.serialize())
     except:
-        print "Unexpected error:", sys.exc_info()[0]
+        traceback.print_exc()
     
 def login_handler(request):
     def verify_login(username, password):
@@ -304,7 +302,7 @@ def login_handler(request):
             else:
                 return None
         except:
-            print "Unexpected error:", sys.exc_info()[0]
+            traceback.print_exc()
 
             
     def login_reply(ctx_id, ctx_data):
@@ -320,7 +318,7 @@ def login_handler(request):
             print 'login reply', repr(buf)
             return CommMessage(request.addr, LoginReply, buf)
         except:
-            print "Unexpected error:", sys.exc_info()[0]
+            traceback.print_exc()
         
     def deny_login():
         try:
@@ -333,7 +331,7 @@ def login_handler(request):
             print 'login error'    
             return CommMessage(request.addr, ShortResponse, buf)
         except:
-            print "Unexpected error:", sys.exc_info()[0]
+            traceback.print_exc()
         
     try:
         username, password = request.msg.username.value, request.msg.password.value
@@ -346,14 +344,14 @@ def login_handler(request):
         else:
             return deny_login(request)
     except:
-        print "Unexpected error:", sys.exc_info()[0]
+        traceback.print_exc()
         
 def logout_handler(request):
     try:
         with rlock():
             ctx_table.remove_client(request.client_ctx)
     except:
-        print "Unexpected error:", sys.exc_info()[0]
+        traceback.print_exc()
 
 class CallSession(object):
     '''Utility class handles all requests/responses regarding a call session'''
@@ -366,7 +364,7 @@ class CallSession(object):
             elif isinstance(request.msg, ClientRTP):
                 return self._handle_rtp(request)
         except:
-            print "Unexpected error:", sys.exc_info()[0]
+            traceback.print_exc()
             
     def _handle_invite(self, request):
         try:
@@ -395,7 +393,7 @@ class CallSession(object):
                 # send ServerForwardInvite to the calle
                 return self._forward_invite(call_ctx, matched_codecs)
         except:
-            print "Unexpected error:", sys.exc_info()[0]
+            traceback.print_exc()
             
     def _forward_invite(self, call_ctx, matched_codecs):
         try:
@@ -421,7 +419,7 @@ class CallSession(object):
             sfi_buffer = sfi.serialize()
             return CommMessage(ctx_table.get_addr(calle_ctx), ServerForwardInvite, sfi_buffer)
         except:
-            print "Unexpected error:", sys.exc_info()[0]
+            traceback.print_exc()
         
     def _matched_codecs(self, client_codecs):
         try:
@@ -431,7 +429,7 @@ class CallSession(object):
             matched_codecs = [codec for codec in client_codecs if codec in server_codecs]
             return len(matched_codecs) and matched_codecs
         except:
-            print "Unexpected error:", sys.exc_info()[0]
+            traceback.print_exc()
             
     def _handle_signaling(self, request):
         try:
@@ -454,7 +452,7 @@ class CallSession(object):
                 
             return ctr and CommMessage(caller_addr, ctr, buf)
         except:
-            print "Unexpected error:", sys.exc_info()[0]
+            traceback.print_exc()
         
     def _handle_rtp(self, request):
         try:
@@ -468,14 +466,14 @@ class CallSession(object):
             else:    
                 print self, '_handle_rtp: call is out of context', repr(call_ctx)
         except:
-            print "Unexpected error:", sys.exc_info()[0]
+            traceback.print_exc()
             
     def _reject(self, reason, request):
         try:
             reject = ServerRejectInvite(client_ctx=request.client_ctx, reason=reason)
             return CommMessage(addr, ServerRejectInvite, reject.serialize())
         except:
-            print "Unexpected error:", sys.exc_info()[0]
+            traceback.print_exc()
         
     def _forward_invite_ack(self, cia, call_type = CallTypes.ViaProxy):
         try:
@@ -490,7 +488,7 @@ class CallSession(object):
             buf = sfr.serialize()
             return buf
         except:
-            print "Unexpected error:", sys.exc_info()[0]
+            traceback.print_exc()
         
 #########################################
 # all module Singletons

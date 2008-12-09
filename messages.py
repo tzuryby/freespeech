@@ -19,7 +19,7 @@ __all__ = ['Parser', 'MessageFramer', 'BaseMessage', 'ByteField', 'CharField', '
     'ServerRejectInvite', 'ShortField', 'ShortResponse', 'StringField', 
     'UUIDField', 'MessageTypes', 'string_to_ctx']
     
-import struct, uuid, sys
+import struct, uuid, sys, traceback
 from ctypes import create_string_buffer
 from md5 import new as md5
 from decorators import printargs
@@ -236,7 +236,7 @@ class BaseMessage(object):
                 
             self.type_code = MessageTypes.keyof(self)
         except:
-            print "Unexpected error:", sys.exc_info()[0]
+            traceback.print_exc()
         
     def _init_buffer(self, newbuffer=None):
         try:
@@ -255,14 +255,14 @@ class BaseMessage(object):
                 elif isinstance(newbuffer,str):
                     self.buf.raw = newbuffer
         except:
-            print "Unexpected error:", sys.exc_info()[0]
+            traceback.print_exc()
             
     def _create_buffer(self, length=0):
         try:
             '''alocates a writeable buffer'''
             return create_string_buffer(length)
         except:
-            print "Unexpected error:", sys.exc_info()[0]        
+            traceback.print_exc()        
         
     def deserialize(self, buf=None):
         try:
@@ -271,14 +271,14 @@ class BaseMessage(object):
                 
             self._set_values(self.seq)        
         except:
-            print "Unexpected error:", sys.exc_info()[0]
+            traceback.print_exc()
         
     def set_values(self, **kwargs):
         try:
             items = (p for p in self.seq if p[0] in kwargs)
             self._set_values(items, kwargs)
         except:
-            print "Unexpected error:", sys.exc_info()[0]
+            traceback.print_exc()
             
     def dict_fields(self):
         try:
@@ -288,7 +288,7 @@ class BaseMessage(object):
                         self.__dict__[field[0]].value) for field in self.seq))
             return x
         except:
-            print "Unexpected error:", sys.exc_info()[0]        
+            traceback.print_exc()        
         
     def _set_values(self, items, values_dict=None):
         try:
@@ -317,7 +317,7 @@ class BaseMessage(object):
                 #next field starting point
                 start = self.__dict__[key].end
         except:
-            print "Unexpected error:", sys.exc_info()[0]
+            traceback.print_exc()
             
     def _pack_values(self):
         try:
@@ -326,7 +326,7 @@ class BaseMessage(object):
             for v in self.seq:
                 self.__dict__[v[0]].pack_into(self.buf)
         except:
-            print "Unexpected error:", sys.exc_info()[0]
+            traceback.print_exc()
             
     def serialize(self):
         try:
@@ -334,7 +334,7 @@ class BaseMessage(object):
             self._pack_values()
             return self.buf.raw
         except:
-            print "Unexpected error:", sys.exc_info()[0]        
+            traceback.print_exc()        
         
     def __repr__(self):
         return repr(self.pack())
@@ -344,7 +344,7 @@ class BaseMessage(object):
             '''packs the buffer and make it ready to ship'''
             return message_framer.frame(self.type_code, self.serialize())
         except:
-            print "Unexpected error:", sys.exc_info()[0]
+            traceback.print_exc()
             
 class ShortResponse(BaseMessage):
     def __init__(self, *args, **kwargs):
