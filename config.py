@@ -5,17 +5,9 @@ from utils import Storage
 #60 Seconds
 CLIENT_EXPIRE = 60
 
-Codecs = Storage(
-    PCMA='\x01', 
-    PCMU='\x02', 
-    G723='\x03', 
-    ILBC='\x04', 
-    SPEEX='\x05', 
-    SNAP='\x07'
-)
+Codecs = Storage(PCMA='\x01', PCMU='\x02', G723='\x03', ILBC='\x04', SPEEX='\x05', SNAP='\x07')
 
-CallTypes = Storage (
-    ViaProxy=1, Direct=2)
+CallTypes = Storage (ViaProxy=1, Direct=2)
 
 Errors = Storage(
     #general
@@ -46,4 +38,11 @@ ClientStatus = Storage(
 Listeners = (
     ('udp', 50009),
     ('tcp', 50009),
+)
+
+Users = Storage(
+    {
+        'tzury': {'username': 'tzury', 'password': '0'*20, 'login_status': 0},
+        'tzury': {'username': 'udi', 'password': '0'*20, 'login_status': 0},
+    }
 )

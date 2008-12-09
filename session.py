@@ -12,8 +12,9 @@ from decorators import printargs
 from twisted.internet import reactor
 
 
-
 rlock = lambda: threading.RLock()
+
+thread_loop_active = True
 
 class Packer(object):
     '''Packs parts of message into a message object and enqueue it'''
@@ -162,7 +163,7 @@ def create_call_ctx(request):
     return (ctx_id, ctx)
     
 def remove_old_clients():
-    while True:
+    while thread_loop_active:
         now = time.time()
         expired_clients = [client.ctx_id for client in ctx_table.clients() if client.expire < now]
         
@@ -170,22 +171,30 @@ def remove_old_clients():
             print 'removing inactive client', repr(ctx_id)
             ctx_table.remove_client(ctx_id)
                 
-        time.sleep(CLIENT_EXPIRE)
-        
+        for i in xrange(CLIENT_EXPIRE):
+            if thread_loop_active:
+                time.sleep(1)
+            else:
+                break
+            
+    print 'terminating thread: remove_old_clients'
+    
 def handle_inbound_queue():
-    while True:
+    while thread_loop_active:
         try:
             req = inbound_messages.get(block=0)
             if req:
                 _filter(req)
         except Queue.Empty:
             time.sleep(0.010)
+            
+    print 'terminating thread: handle_inbound_queue'
         
 def fooo():
     print 'I was just called on dury from reactor.threading'
     
 def handle_outbound_queue():
-    while True:
+    while thread_loop_active:
         try:
             reply = outbound_messages.get(block=0)
             if reply and hasattr(reply, 'msg') and hasattr(reply, 'addr'):
@@ -199,7 +208,9 @@ def handle_outbound_queue():
                     
         except Queue.Empty:
             time.sleep(0.010)
-        
+            
+    print 'terminating thread: handle_outbound_queue'    
+    
 def _filter(request):
     _out = None
     msg = request.msg

@@ -3,7 +3,7 @@ from snoipclient import SnoipClient
 import time
 
 # init a client at snoip port
-sc = SnoipClient(('', 50009))
+sc = SnoipClient(('localhost', 50009))
 
 #login 
 sc.login('tzury', '0'*20)

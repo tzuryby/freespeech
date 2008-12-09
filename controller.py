@@ -1,9 +1,13 @@
 #!/usr/bin/env python
 
+import threading, signal
 from threading import Thread
+from twisted.internet import reactor
 from serverfactory import serve
+
 import config
 import session
+
 
 
 def run_all():
@@ -14,6 +18,18 @@ def run_all():
     for thread in threads:
         Thread(target = thread).start()
         
+        
+def stop_all(*args):
+    
+    #stop the reactor
+    print '\ntermination process started...\nterminating reactor\'s mainloop'
+    reactor.stop()
+    #stop flag for threads at session module (started at start_all() function above)
+    session.thread_loop_active = False
+    
+
+signal.signal(signal.SIGINT, stop_all)    
+
 if __name__ == '__main__':
     run_all()
     serve(config.Listeners)
