@@ -1,4 +1,6 @@
 #!/usr/bin/env python
+# -*- coding: UTF-8 -*-
+
 from __future__ import with_statement
 
 import time, Queue, struct, uuid, threading
@@ -43,7 +45,7 @@ class Packer(object):
     # receives the message and store it in the clients[client]
     def _recv(self, client, msg):
         # new client or new message
-        if (client not in self.clients or self.parser.bof(msg)):
+        if (client not in self.clients and self.parser.bof(msg)):
             self.clients[client] = msg
         else:
             self.clients[client] = self.clients[client] + msg
@@ -224,7 +226,7 @@ def _filter(request):
             messages.LoginRequest: login_handler,
             messages.Logout: logout_handler,
             messages.KeepAlive: keep_alive_handler 
-            }
+        }
             
         if msg_type in switch:
             _out = switch[msg_type](request)
@@ -238,7 +240,7 @@ def _filter(request):
     else:
         outbound_messages.put(_out)
         if ctx:
-            touch_client(request.client_ctx)        
+            touch_client(request.client_ctx)    
         
 def touch_client(ctx, time_stamp = time.time(), expire=None):
     if not expire:

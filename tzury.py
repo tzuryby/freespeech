@@ -1,3 +1,6 @@
+#!/usr/bin/env python
+# -*- coding: UTF-8 -*-
+
 from __future__ import with_statement
 from snoipclient import SnoipClient
 import time

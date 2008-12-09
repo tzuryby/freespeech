@@ -1,4 +1,6 @@
 #!/usr/bin/env python
+# -*- coding: UTF-8 -*-
+
 '''
     **************************************
     Database connectivity layer (part of freespeech.py)
