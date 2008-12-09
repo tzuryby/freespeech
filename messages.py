@@ -19,7 +19,7 @@ __all__ = ['Parser', 'MessageFramer', 'BaseMessage', 'ByteField', 'CharField', '
     'ServerRejectInvite', 'ShortField', 'ShortResponse', 'StringField', 
     'UUIDField', 'MessageTypes', 'string_to_ctx']
     
-import struct, uuid
+import struct, uuid, sys
 from ctypes import create_string_buffer
 from md5 import new as md5
 from decorators import printargs
@@ -126,9 +126,13 @@ class Field(object):
             print 'format', self.format, 'buffer', repr(buf), 'start', self.start, 'value', self._value
         
     def unpack_from(self, buf):
-        '''unpack the value from a supplied buffer'''
-        self.value = struct.unpack_from(self.format, buf, self.start)
-    
+        try:
+            '''unpack the value from a supplied buffer'''
+            self.value = struct.unpack_from(self.format, buf, self.start)
+        except Exception, inst:
+            print 'Error @ calling startuct.unpack_from with:'
+            print 'format', self.format, 'buffer', repr(buf), 'start', self.start, 'value', self._value
+            
     def __setattr__(self, k, v):
         '''a wrapper around x.value ensure _value will always be a tuple'''
         if k == 'value':
@@ -222,96 +226,126 @@ class BaseMessage(object):
     seq = [] # the sequence of fields stored in the buffer
     buf = None
     
-    def __init__(self, *args, **kwargs):        
-        if 'buf' in kwargs:
-            self.deserialize(kwargs['buf'])
-            
-        elif 'length' in kwargs:
-            self.buf = create_string_buffer(kwargs['length'])
-            
-        self.type_code = MessageTypes.keyof(self)
+    def __init__(self, *args, **kwargs):
+        try:
+            if 'buf' in kwargs:
+                self.deserialize(kwargs['buf'])
+                
+            elif 'length' in kwargs:
+                self.buf = create_string_buffer(kwargs['length'])
+                
+            self.type_code = MessageTypes.keyof(self)
+        except:
+            print "Unexpected error:", sys.exc_info()[0]
         
     def _init_buffer(self, newbuffer=None):
-        if not self.buf and not newbuffer:
-            length = sum((self.__dict__[field[0]].length for field in self.seq))
-            self.buf = self._create_buffer(length)
-            
-        elif newbuffer:
-            # self.buf never initialized
-            if not self.buf:
-                self.buf = self._create_buffer(len(newbuffer))
+        try:
+            if not self.buf and not newbuffer:
+                length = sum((self.__dict__[field[0]].length for field in self.seq))
+                self.buf = self._create_buffer(length)
                 
-            # assign or copy the string-value into self.buf
-            if hasattr(newbuffer, 'raw'):
-                self.buf = newbuffer
-            elif isinstance(newbuffer,str):
-                self.buf.raw = newbuffer
+            elif newbuffer:
+                # self.buf never initialized
+                if not self.buf:
+                    self.buf = self._create_buffer(len(newbuffer))
+                    
+                # assign or copy the string-value into self.buf
+                if hasattr(newbuffer, 'raw'):
+                    self.buf = newbuffer
+                elif isinstance(newbuffer,str):
+                    self.buf.raw = newbuffer
+        except:
+            print "Unexpected error:", sys.exc_info()[0]
             
     def _create_buffer(self, length=0):
-        '''alocates a writeable buffer'''
-        return create_string_buffer(length)
+        try:
+            '''alocates a writeable buffer'''
+            return create_string_buffer(length)
+        except:
+            print "Unexpected error:", sys.exc_info()[0]        
         
     def deserialize(self, buf=None):
-        if buf:
-            self._init_buffer(buf)
-            
-        self._set_values(self.seq)        
+        try:
+            if buf:
+                self._init_buffer(buf)
+                
+            self._set_values(self.seq)        
+        except:
+            print "Unexpected error:", sys.exc_info()[0]
         
     def set_values(self, **kwargs):
-        items = (p for p in self.seq if p[0] in kwargs)
-        self._set_values(items, kwargs)
-        
+        try:
+            items = (p for p in self.seq if p[0] in kwargs)
+            self._set_values(items, kwargs)
+        except:
+            print "Unexpected error:", sys.exc_info()[0]
+            
     def dict_fields(self):
-        '''all fields as dict {name: value, ...}'''
-        x = dict(
-            ((self.__dict__[field[0]].name, 
-                    self.__dict__[field[0]].value) for field in self.seq))
-        return x
+        try:
+            '''all fields as dict {name: value, ...}'''
+            x = dict(
+                ((self.__dict__[field[0]].name, 
+                        self.__dict__[field[0]].value) for field in self.seq))
+            return x
+        except:
+            print "Unexpected error:", sys.exc_info()[0]        
         
     def _set_values(self, items, values_dict=None):
-        start = 0 # first field position
-        for params in items:
-            key, ctr = params[0], params[1]
-            format = len(params) == 3 and params[2]
-            args = [start]
-            if format:
-                if hasattr(format, '__call__'): 
-                    format = format()
-                args.append(format)
-            
-            # key -> field.name
-            args.append(key)
-            
-            # set a property as field-name and its value as Field instance.
-            self.__dict__[key] = ctr(*args)
-            
-            # set the value either to a supplied argument or extract from the buffer
-            if values_dict:
-                self.__dict__[key].value = values_dict[key]
-            else:
-                self.__dict__[key].unpack_from(self.buf)
+        try:
+            start = 0 # first field position
+            for params in items:
+                key, ctr = params[0], params[1]
+                format = len(params) == 3 and params[2]
+                args = [start]
+                if format:
+                    if hasattr(format, '__call__'): 
+                        format = format()
+                    args.append(format)
                 
-            #next field starting point
-            start = self.__dict__[key].end
+                # key -> field.name
+                args.append(key)
+                
+                # set a property as field-name and its value as Field instance.
+                self.__dict__[key] = ctr(*args)
+                
+                # set the value either to a supplied argument or extract from the buffer
+                if values_dict:
+                    self.__dict__[key].value = values_dict[key]
+                else:
+                    self.__dict__[key].unpack_from(self.buf)
+                    
+                #next field starting point
+                start = self.__dict__[key].end
+        except:
+            print "Unexpected error:", sys.exc_info()[0]
             
     def _pack_values(self):
-        '''packs all the values into the buffer'''
-        self._init_buffer()
-        for v in self.seq:
-            self.__dict__[v[0]].pack_into(self.buf)
-        
+        try:
+            '''packs all the values into the buffer'''
+            self._init_buffer()
+            for v in self.seq:
+                self.__dict__[v[0]].pack_into(self.buf)
+        except:
+            print "Unexpected error:", sys.exc_info()[0]
+            
     def serialize(self):
-        '''packs all values into the buffer and returns the buffer'''
-        self._pack_values()
-        return self.buf.raw
+        try:
+            '''packs all values into the buffer and returns the buffer'''
+            self._pack_values()
+            return self.buf.raw
+        except:
+            print "Unexpected error:", sys.exc_info()[0]        
         
     def __repr__(self):
         return repr(self.pack())
         
     def pack(self):
-        '''packs the buffer and make it ready to ship'''
-        return message_framer.frame(self.type_code, self.serialize())
-
+        try:
+            '''packs the buffer and make it ready to ship'''
+            return message_framer.frame(self.type_code, self.serialize())
+        except:
+            print "Unexpected error:", sys.exc_info()[0]
+            
 class ShortResponse(BaseMessage):
     def __init__(self, *args, **kwargs):
         self.seq = [
@@ -393,7 +427,7 @@ class ServerRejectInvite(ShortResponse):
         if ('client_ctx' in kwargs or 'reason' in kwargs) and 'buf' not in kwargs:
             self.set_values(client_ctx = kwargs['client_ctx'], reason = kwargs['reason'])
         else:
-            raise 'Incorrect parameters'
+            print ('Incorrect parameters')
             
 class ServerForwardInvite(SignalingMessage):
     def __init__(self, *args, **kwargs):

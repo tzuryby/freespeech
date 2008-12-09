@@ -26,29 +26,35 @@ class Packer(object):
         self.parser = Parser()
         
     def pack(self, client, msg):
-        self._recv(client, msg)
-        if self.parser.eof(msg):
-            # get the whole message
-            msg = self.clients[client]
-            if self.parser.valid(msg):
-                msg_type, buf = self.parser.body(self.clients[client])
-                ctr = MessageTypes[msg_type]
-                cm = CommMessage(client, ctr, buf)
-                self.queue.put(cm)                    
+        try:
+            self._recv(client, msg)
+            if self.parser.eof(msg):
+                # get the whole message
+                msg = self.clients[client]
+                if self.parser.valid(msg):
+                    msg_type, buf = self.parser.body(self.clients[client])
+                    ctr = MessageTypes[msg_type]
+                    cm = CommMessage(client, ctr, buf)
+                    self.queue.put(cm)                    
+                else:
+                    print 'Packer.pack() >>> not a valid message', msg
+                
+                del self.clients[client]
             else:
-                print 'Packer.pack() >>> not a valid message', msg
-            
-            del self.clients[client]
-        else:
-            print 'Packer.pack() >>> eof not found, waiting for more bytes'
+                print 'Packer.pack() >>> eof not found, waiting for more bytes'
+        except:
+            print "Unexpected error:", sys.exc_info()[0]
             
     # receives the message and store it in the clients[client]
     def _recv(self, client, msg):
-        # new client or new message
-        if (client not in self.clients and self.parser.bof(msg)):
-            self.clients[client] = msg
-        else:
-            self.clients[client] = self.clients[client] + msg
+        try:
+            # new client or new message
+            if (client not in self.clients and self.parser.bof(msg)):
+                self.clients[client] = msg
+            else:
+                self.clients[client] = self.clients[client] + msg
+        except:
+            print "Unexpected error:", sys.exc_info()[0]
 
 '''a pool of all the listeners (tcp+udp) and thier known clients'''
 class ServersPool(Storage):
@@ -123,78 +129,90 @@ class CtxTable(Storage):
         return ((self[ctx].client_name, self[ctx].status) for ctx in self)
             
 def recv_msg(caller, (host, port), msg):
-    '''every server, onDataReceived call this function with the data'''
-    msg_packer.pack((host, port), msg)
-    
+    try:
+        '''every server, onDataReceived call this function with the data'''
+        msg_packer.pack((host, port), msg)
+    except:
+        print "Unexpected error:", sys.exc_info()[0]
+            
 def create_client_context(comm_msg, status=ClientStatus.Unknown):
-    '''creates the client context for each new logged in client        
-    returns a tuple(ctx_id, client_ctx_data)
-    client_ctx_data.keys() =>
-        addr, status, expire, last_keep_alive, socket, proto, 
-        socket_id, ctx_id, call_ctx, client_name
-    '''
-    ctx_id = comm_msg.client_ctx
-    addr = comm_msg.addr
-    if servers_pool.known_address(addr):
-        now = time.time()
-        ctx = Storage (addr=addr, status=status, expire=now + CLIENT_EXPIRE,
-            last_keep_alive=now, ctx_id = ctx_id, call_ctx = None, 
-            client_name = comm_msg.msg.username.value)
-        return (ctx_id, ctx)
-    else:
-        return None
-
+    try:
+        '''creates the client context for each new logged in client        
+        returns a tuple(ctx_id, client_ctx_data)
+        client_ctx_data.keys() =>
+            addr, status, expire, last_keep_alive, socket, proto, 
+            socket_id, ctx_id, call_ctx, client_name
+        '''
+        ctx_id = comm_msg.client_ctx
+        addr = comm_msg.addr
+        if servers_pool.known_address(addr):
+            now = time.time()
+            ctx = Storage (addr=addr, status=status, expire=now + CLIENT_EXPIRE,
+                last_keep_alive=now, ctx_id = ctx_id, call_ctx = None, 
+                client_name = comm_msg.msg.username.value)
+            return (ctx_id, ctx)
+        else:
+            return None
+    except:
+        print "Unexpected error:", sys.exc_info()[0]
+            
 def create_call_ctx(request):
-    '''creates the call context for each valid invite
-    returns a tuple(ctx_id, call_ctx_data)
-    call_ctx_data.keys() =>
-        caller_ctx, calle_ctx, start_time, answer_time, end_time, codec, proto, ctx_id
-    '''
-    caller_ctx = request.msg.client_ctx.value
-    calle_ctx = string_to_ctx(request.msg.calle_name.value)
-    ctx_id =  string_to_ctx(caller_ctx, calle_ctx)
-    ctx = Storage(
-        caller_ctx = caller_ctx,
-        calle_ctx = calle_ctx,
-        start_time = time.time(),
-        answer_time = 0,
-        end_time = 0,
-        codec = None,
-        ctx_id = ctx_id
-    )
-    return (ctx_id, ctx)
+    try:
+        '''creates the call context for each valid invite
+        returns a tuple(ctx_id, call_ctx_data)
+        call_ctx_data.keys() =>
+            caller_ctx, calle_ctx, start_time, answer_time, end_time, codec, proto, ctx_id
+        '''
+        caller_ctx = request.msg.client_ctx.value
+        calle_ctx = string_to_ctx(request.msg.calle_name.value)
+        ctx_id =  string_to_ctx(caller_ctx, calle_ctx)
+        ctx = Storage(
+            caller_ctx = caller_ctx,
+            calle_ctx = calle_ctx,
+            start_time = time.time(),
+            answer_time = 0,
+            end_time = 0,
+            codec = None,
+            ctx_id = ctx_id
+        )
+        return (ctx_id, ctx)
+    except:
+        print "Unexpected error:", sys.exc_info()[0]
     
 def remove_old_clients():
-    while thread_loop_active:
-        now = time.time()
-        expired_clients = [client.ctx_id for client in ctx_table.clients() if client.expire < now]
-        
-        for ctx_id in expired_clients:
-            print 'removing inactive client', repr(ctx_id)
-            ctx_table.remove_client(ctx_id)
-                
-        for i in xrange(CLIENT_EXPIRE):
-            if thread_loop_active:
-                time.sleep(1)
-            else:
-                break
+    try:
+        while thread_loop_active:
+            now = time.time()
+            expired_clients = [client.ctx_id for client in ctx_table.clients() if client.expire < now]
             
-    print 'terminating thread: remove_old_clients'
+            for ctx_id in expired_clients:
+                print 'removing inactive client', repr(ctx_id)
+                ctx_table.remove_client(ctx_id)
+                    
+            for i in xrange(CLIENT_EXPIRE):
+                if thread_loop_active:
+                    time.sleep(1)
+                else:
+                    break
+                
+        print 'terminating thread: remove_old_clients'
+    except:
+        print "Unexpected error:", sys.exc_info()[0]
     
 def handle_inbound_queue():
-    while thread_loop_active:
-        try:
-            req = inbound_messages.get(block=0)
-            if req:
-                _filter(req)
-        except Queue.Empty:
-            time.sleep(0.010)
-            
-    print 'terminating thread: handle_inbound_queue'
+    try:
+        while thread_loop_active:
+            try:
+                req = inbound_messages.get(block=0)
+                if req:
+                    _filter(req)
+            except Queue.Empty:
+                time.sleep(0.010)
+                
+        print 'terminating thread: handle_inbound_queue'
+    except:
+        print "Unexpected error:", sys.exc_info()[0]
         
-def fooo():
-    print 'I was just called on dury from reactor.threading'
-    
 def handle_outbound_queue():
     while thread_loop_active:
         try:
@@ -210,219 +228,269 @@ def handle_outbound_queue():
                     
         except Queue.Empty:
             time.sleep(0.010)
+        except:
+            print "Unexpected error:", sys.exc_info()[0]
             
-    print 'terminating thread: handle_outbound_queue'    
+    print 'terminating thread: handle_outbound_queue'
     
 def _filter(request):
-    _out = None
-    msg = request.msg
-    msg_type = request.msg_type
-    ctx = hasattr(msg, 'client_ctx') and msg.client_ctx.value    
-    if not ctx and msg_type != LoginRequest:
+    try:
         _out = None
-        
-    elif ctx in ctx_tabls.clients_ctx():
-        switch = {
-            messages.LoginRequest: login_handler,
-            messages.Logout: logout_handler,
-            messages.KeepAlive: keep_alive_handler 
-        }
+        msg = request.msg
+        msg_type = request.msg_type
+        ctx = hasattr(msg, 'client_ctx') and msg.client_ctx.value    
+        if not ctx and msg_type != LoginRequest:
+            _out = None
             
-        if msg_type in switch:
-            _out = switch[msg_type](request)
-        elif isinstance(msg, (SignalingMessage, ClientRTP)):
-            _out = call_session_handler(request)
-    else:
-        _out = None
-        
-    if not _out:
-        print 'filter is throwing away unknown msg_type or client: %s, %s, %s'  %(repr(ctx), repr(msg_type), repr(msg))
-    else:
-        outbound_messages.put(_out)
-        if ctx:
-            touch_client(request.client_ctx)    
+        elif ctx in ctx_tabls.clients_ctx():
+            switch = {
+                messages.LoginRequest: login_handler,
+                messages.Logout: logout_handler,
+                messages.KeepAlive: keep_alive_handler 
+            }
+                
+            if msg_type in switch:
+                _out = switch[msg_type](request)
+            elif isinstance(msg, (SignalingMessage, ClientRTP)):
+                _out = call_session_handler(request)
+        else:
+            _out = None
+            
+        if not _out:
+            print 'filter is throwing away unknown msg_type/client_ctx: %s, %s, %s'  %(repr(ctx), repr(msg_type), repr(msg))
+        else:
+            outbound_messages.put(_out)
+            if ctx:
+                touch_client(request.client_ctx)
+    except:
+        print "Unexpected error:", sys.exc_info()[0]
         
 def touch_client(ctx, time_stamp = time.time(), expire=None):
-    if not expire:
-        expire = time_stamp + CLIENT_EXPIRE
-    
-    if ctx in ctx_table:
-        ctx_table[ctx].last_keep_alive = time_stamp
-        ctx_table[ctx].expire = expire
+    try:
+        if not expire:
+            expire = time_stamp + CLIENT_EXPIRE
         
+        if ctx in ctx_table:
+            ctx_table[ctx].last_keep_alive = time_stamp
+            ctx_table[ctx].expire = expire
+    except:
+        print "Unexpected error:", sys.exc_info()[0]        
         
 def keep_alive_handler(request):
-    expire = CLIENT_EXPIRE
-    #register last keep alive
-    touch_client(request.client_ctx, time.time(), expire)
-    #reply with keep-alive-ack
-    kaa = KeepAliveAck()
-    
-    kaa.set_values(client_ctx=request.client_ctx,
-        expire = expire,
-        refresh_contact_list = 0
-    )
-    
-    return CommMessage(request.addr, KeepAliveAck, kaa.serialize())
+    try:
+        expire = CLIENT_EXPIRE
+        #register last keep alive
+        touch_client(request.client_ctx, time.time(), expire)
+        #reply with keep-alive-ack
+        kaa = KeepAliveAck()
+        
+        kaa.set_values(client_ctx=request.client_ctx,
+            expire = expire,
+            refresh_contact_list = 0
+        )
+        
+        return CommMessage(request.addr, KeepAliveAck, kaa.serialize())
+    except:
+        print "Unexpected error:", sys.exc_info()[0]
     
 def login_handler(request):
     def verify_login(username, password):
-        dbuser = users[unicode(username)]
-        '''match supplied credentials with the database'''
-        if dbuser and str(dbuser.password) == str(password):
-            print 'login succseed'
-            return dbuser
-        else:
-            return None
+        try:
+            dbuser = users[unicode(username)]
+            '''match supplied credentials with the database'''
+            if dbuser and str(dbuser.password) == str(password):
+                print 'login succseed'
+                return dbuser
+            else:
+                return None
+        except:
+            print "Unexpected error:", sys.exc_info()[0]
+
             
     def login_reply(ctx_id, ctx_data):
-        '''creates login reply and put it in the outbound queue'''
-        lr = LoginReply()
-        ip, port = ctx_data.addr
-        codecs = sorted(Codecs.values())
-        lr.set_values(client_ctx=ctx_id, client_public_ip=ip , 
-            client_public_port=port, ctx_expire=ctx_table[ctx_id].expire - time.time(), 
-            num_of_codecs=len(codecs), codec_list=''.join((c for c in codecs)))
-        buf = lr.serialize()
-        print 'login reply', repr(buf)
-        return CommMessage(request.addr, LoginReply, buf)
+        try:
+            '''creates login reply and put it in the outbound queue'''
+            lr = LoginReply()
+            ip, port = ctx_data.addr
+            codecs = sorted(Codecs.values())
+            lr.set_values(client_ctx=ctx_id, client_public_ip=ip , 
+                client_public_port=port, ctx_expire=ctx_table[ctx_id].expire - time.time(), 
+                num_of_codecs=len(codecs), codec_list=''.join((c for c in codecs)))
+            buf = lr.serialize()
+            print 'login reply', repr(buf)
+            return CommMessage(request.addr, LoginReply, buf)
+        except:
+            print "Unexpected error:", sys.exc_info()[0]
         
     def deny_login():
-        '''creates login-denied reply and put it in the outbound queue'''
-        ld = ShortResponse()
-        ld.set_values(
-            client_ctx = ('\x00 '*16).split(),
-            result = struct.unpack('!h', Errors.LoginFailure))
-        buf = ld.serialize()
-        print 'login error'    
-        return CommMessage(request.addr, ShortResponse, buf)
+        try:
+            '''creates login-denied reply and put it in the outbound queue'''
+            ld = ShortResponse()
+            ld.set_values(
+                client_ctx = ('\x00 '*16).split(),
+                result = struct.unpack('!h', Errors.LoginFailure))
+            buf = ld.serialize()
+            print 'login error'    
+            return CommMessage(request.addr, ShortResponse, buf)
+        except:
+            print "Unexpected error:", sys.exc_info()[0]
         
-    username, password = request.msg.username.value, request.msg.password.value
-    dbuser = verify_login(username, password)
-    if dbuser:
-        #creates new client context and register it
-        ctx_id, ctx_data = create_client_context(request, status=dbuser.login_status)    
-        ctx_table.add_client((ctx_id, ctx_data))
-        return login_reply(ctx_id, ctx_data)
-    else:
-        return deny_login(request)
-
+    try:
+        username, password = request.msg.username.value, request.msg.password.value
+        dbuser = verify_login(username, password)
+        if dbuser:
+            #creates new client context and register it
+            ctx_id, ctx_data = create_client_context(request, status=dbuser.login_status)    
+            ctx_table.add_client((ctx_id, ctx_data))
+            return login_reply(ctx_id, ctx_data)
+        else:
+            return deny_login(request)
+    except:
+        print "Unexpected error:", sys.exc_info()[0]
+        
 def logout_handler(request):
-    with rlock():
-        ctx_table.remove_client(request.client_ctx)
-    
+    try:
+        with rlock():
+            ctx_table.remove_client(request.client_ctx)
+    except:
+        print "Unexpected error:", sys.exc_info()[0]
+
 class CallSession(object):
     '''Utility class handles all requests/responses regarding a call session'''
     def handle(self, request):
-        if request.msg_type == ClientInvite:
-            return self._handle_invite(request)
-        elif isinstance(request.msg, SignalingMessage):
-            return self._handle_signaling(request)
-        elif isinstance(request.msg, ClientRTP):
-            return self._handle_rtp(request)
+        try:
+            if request.msg_type == ClientInvite:
+                return self._handle_invite(request)
+            elif isinstance(request.msg, SignalingMessage):
+                return self._handle_signaling(request)
+            elif isinstance(request.msg, ClientRTP):
+                return self._handle_rtp(request)
+        except:
+            print "Unexpected error:", sys.exc_info()[0]
             
     def _handle_invite(self, request):
-        caller_ctx = request.msg.client_ctx.value
-        calle_ctx = string_to_ctx(request.msg.calle_name.value)
-        
-        # calle is not logged in
-        if calle_ctx not in ctx_table:
-            return self._reject(config.Errors.CalleeNotFound, request)
+        try:
+            caller_ctx = request.msg.client_ctx.value
+            calle_ctx = string_to_ctx(request.msg.calle_name.value)
             
-        # calle is in another call session
-        elif ctx_table[calle_ctx].call_ctx:
-            return self._reject(config.Errors.CalleeUnavailable, request)
-            
-        #todo: add here `away-status` case handler
-        matched_codecs = self._matched_codecs(request.msg.codec_list.value)
-        print 'matched_codecs:', matched_codecs
-        # caller codecs do not match with the server's
-        if not matched_codecs:
-            return self._reject(config.Errors.CodecMismatch, request)
-        else:
-            # create call ctx
-            call_ctx_id, call_ctx = create_call_ctx(request)            
-            # mark the caller as in another call session
-            ctx_table[caller_ctx].call_ctx = call_ctx
-            # send ServerForwardInvite to the calle
-            return self._forward_invite(call_ctx, matched_codecs)
+            # calle is not logged in
+            if calle_ctx not in ctx_table:
+                return self._reject(config.Errors.CalleeNotFound, request)
+                
+            # calle is in another call session
+            elif ctx_table[calle_ctx].call_ctx:
+                return self._reject(config.Errors.CalleeUnavailable, request)
+                
+            #todo: add here `away-status` case handler
+            matched_codecs = self._matched_codecs(request.msg.codec_list.value)
+            print 'matched_codecs:', matched_codecs
+            # caller codecs do not match with the server's
+            if not matched_codecs:
+                return self._reject(config.Errors.CodecMismatch, request)
+            else:
+                # create call ctx
+                call_ctx_id, call_ctx = create_call_ctx(request)            
+                # mark the caller as in another call session
+                ctx_table[caller_ctx].call_ctx = call_ctx
+                # send ServerForwardInvite to the calle
+                return self._forward_invite(call_ctx, matched_codecs)
+        except:
+            print "Unexpected error:", sys.exc_info()[0]
             
     def _forward_invite(self, call_ctx, matched_codecs):
-        caller_ctx = call_ctx.caller_ctx
-        calle_ctx = call_ctx.calle_ctx
-        caller_name = ctx_table[caller_ctx].client_name        
-        caller_ip, caller_port = ctx_table.get_addr(caller_ctx)
-        codec_list = ''.join(matched_codecs)
-        
-        sfi = ServerForwardInvite()
-        sfi.set_values(
-            client_ctx = calle_ctx,
-            call_ctx = call_ctx.ctx_id,
-            call_type = config.CallTypes.ViaProxy,
-            client_name_length = len(caller_name),
-            client_name = caller_name,
-            client_public_ip = caller_ip,
-            client_public_port = caller_port,
-            num_of_codecs = len(matched_codecs),
-            codec_list = codec_list
-        )
-        
-        sfi_buffer = sfi.serialize()
-        return CommMessage(ctx_table.get_addr(calle_ctx), ServerForwardInvite, sfi_buffer)
+        try:
+            caller_ctx = call_ctx.caller_ctx
+            calle_ctx = call_ctx.calle_ctx
+            caller_name = ctx_table[caller_ctx].client_name        
+            caller_ip, caller_port = ctx_table.get_addr(caller_ctx)
+            codec_list = ''.join(matched_codecs)
+            
+            sfi = ServerForwardInvite()
+            sfi.set_values(
+                client_ctx = calle_ctx,
+                call_ctx = call_ctx.ctx_id,
+                call_type = config.CallTypes.ViaProxy,
+                client_name_length = len(caller_name),
+                client_name = caller_name,
+                client_public_ip = caller_ip,
+                client_public_port = caller_port,
+                num_of_codecs = len(matched_codecs),
+                codec_list = codec_list
+            )
+            
+            sfi_buffer = sfi.serialize()
+            return CommMessage(ctx_table.get_addr(calle_ctx), ServerForwardInvite, sfi_buffer)
+        except:
+            print "Unexpected error:", sys.exc_info()[0]
         
     def _matched_codecs(self, client_codecs):
-        '''returns either `0` or a list of matched codecs between the client and the server'''
-        server_codecs = config.Codecs.values()
-        # inefficient algorithm
-        matched_codecs = [codec for codec in client_codecs if codec in server_codecs]
-        return len(matched_codecs) and matched_codecs
+        try:
+            '''returns either `0` or a list of matched codecs between the client and the server'''
+            server_codecs = config.Codecs.values()
+            # inefficient algorithm
+            matched_codecs = [codec for codec in client_codecs if codec in server_codecs]
+            return len(matched_codecs) and matched_codecs
+        except:
+            print "Unexpected error:", sys.exc_info()[0]
             
     def _handle_signaling(self, request):
-        ctr, msg, call_ctx = None, request.msg, request.call_ctx
-        
-        if call_ctx in ctx_table.calls_ctx():
-            calle_addr = request.addr
-            call_ctx = ctx_table.find_call(call_ctx)
-            if call_ctx:
-                caller_addr = ctx_table.get_addr(call_ctx.caller_ctx)                
-                if isinstance(msg, ClientInviteAck):                
-                    buf = self._forward_invite_ack(msg)
-                    ctr = ServerForwardRing
-                elif isinstance(msg, ClientAnswer):
-                    # ClientAnswer is forwarded as is
-                    buf = msg.serialize()
-                    ctr = ClientAnswer                
-        else:
-            print '_handle_signaling: call is out of context', repr(call_ctx)
+        try:
+            ctr, msg, call_ctx = None, request.msg, request.call_ctx
             
-        return ctr and CommMessage(caller_addr, ctr, buf)
+            if call_ctx in ctx_table.calls_ctx():
+                calle_addr = request.addr
+                call_ctx = ctx_table.find_call(call_ctx)
+                if call_ctx:
+                    caller_addr = ctx_table.get_addr(call_ctx.caller_ctx)                
+                    if isinstance(msg, ClientInviteAck):                
+                        buf = self._forward_invite_ack(msg)
+                        ctr = ServerForwardRing
+                    elif isinstance(msg, ClientAnswer):
+                        # ClientAnswer is forwarded as is
+                        buf = msg.serialize()
+                        ctr = ClientAnswer                
+            else:
+                print '_handle_signaling: call is out of context', repr(call_ctx)
+                
+            return ctr and CommMessage(caller_addr, ctr, buf)
+        except:
+            print "Unexpected error:", sys.exc_info()[0]
         
     def _handle_rtp(self, request):
-        call_ctx = ctx_table.find_call(request.call_ctx)
-        if call_ctx:
-            # get the other party client_ctx
-            forward_to = (call_ctx.caller_ctx == request.client_ctx 
-                and call_ctx.calle_ctx) or request.client_ctx
-            request.addr = ctx_table.get_addr(forward_to)
-            return request
-        else:    
-            print self, '_handle_rtp: call is out of context', repr(call_ctx)
+        try:
+            call_ctx = ctx_table.find_call(request.call_ctx)
+            if call_ctx:
+                # get the other party client_ctx
+                forward_to = (call_ctx.caller_ctx == request.client_ctx 
+                    and call_ctx.calle_ctx) or request.client_ctx
+                request.addr = ctx_table.get_addr(forward_to)
+                return request
+            else:    
+                print self, '_handle_rtp: call is out of context', repr(call_ctx)
+        except:
+            print "Unexpected error:", sys.exc_info()[0]
             
     def _reject(self, reason, request):
-        reject = ServerRejectInvite(client_ctx=request.client_ctx, reason=reason)
-        return CommMessage(addr, ServerRejectInvite, reject.serialize())
+        try:
+            reject = ServerRejectInvite(client_ctx=request.client_ctx, reason=reason)
+            return CommMessage(addr, ServerRejectInvite, reject.serialize())
+        except:
+            print "Unexpected error:", sys.exc_info()[0]
         
     def _forward_invite_ack(self, cia, call_type = CallTypes.ViaProxy):
-        sfr = ServerForwardRing()
-        sfr.set_values(
-            client_ctx = cia.client_ctx.value,
-            call_ctx = cia.call_ctx.value,
-            client_status = cia.client_status.value,
-            call_type = call_type,
-            client_public_ip = cia.client_public_ip.value,
-            client_public_port = cia.client_public_port.value)
-        buf = sfr.serialize()
-        return buf
+        try:
+            sfr = ServerForwardRing()
+            sfr.set_values(
+                client_ctx = cia.client_ctx.value,
+                call_ctx = cia.call_ctx.value,
+                client_status = cia.client_status.value,
+                call_type = call_type,
+                client_public_ip = cia.client_public_ip.value,
+                client_public_port = cia.client_public_port.value)
+            buf = sfr.serialize()
+            return buf
+        except:
+            print "Unexpected error:", sys.exc_info()[0]
         
 #########################################
 # all module Singletons
