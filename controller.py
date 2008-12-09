@@ -28,10 +28,9 @@ def stop_all(*args):
     session.thread_loop_active = False
     
 
-signal.signal(signal.SIGINT, stop_all)    
-
 if __name__ == '__main__':
     try:
+        signal.signal(signal.SIGINT, stop_all)
         run_all()
         serve(config.Listeners)
     # why there is no signal on windows? 
