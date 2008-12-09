@@ -100,7 +100,7 @@ class CommMessage(object):
             
         elif isinstance(self.msg, (LoginRequest,)):
             client_ctx = string_to_ctx(self.msg.username.value)
-            print 'creating a client_ctx ->', 'username:' , self.msg.username.value, 'ctx:', client_ctx, '<-'
+            print 'a new client_ctx', 'username:' , self.msg.username.value, 'ctx:', repr(client_ctx)
             self.client_ctx = client_ctx
             
         self.call_ctx = hasattr(self.msg, 'call_ctx') and self.msg.call_ctx.value

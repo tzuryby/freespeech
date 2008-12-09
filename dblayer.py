@@ -22,7 +22,6 @@ def users():
     return users
     
 Users = users()
-#Users = Config.Users = users()
 
 if __name__ == '__main__':
     for key in Config.keys():

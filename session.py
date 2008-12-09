@@ -240,22 +240,22 @@ def _filter(request):
         msg_type = request.msg_type
         ctx = hasattr(msg, 'client_ctx') and msg.client_ctx.value
         
-        if not ctx and msg_type != LoginRequest:
+        if not ctx and msg_type != LoginRequest or (
+            ctx and ctx not in ctx_table.clients_ctx()):
             print 'filter is throwing away unknown msg_type/client_ctx: %s, %s, %s'  %(repr(ctx), repr(msg_type), repr(msg))
             
-        elif ctx in ctx_table.clients_ctx():
+        else:
             switch = {
-                messages.LoginRequest: login_handler,
-                messages.Logout: logout_handler,
-                messages.KeepAlive: keep_alive_handler 
+                LoginRequest: login_handler,
+                Logout: logout_handler,
+                KeepAlive: keep_alive_handler 
             }
                 
-            if msg_type in switch:
+            if msg_type in switch.keys():
                 _out = switch[msg_type](request)
                 
             elif isinstance(msg, (SignalingMessage, ClientRTP)):
                 _out = call_session_handler(request)
-                
         if _out:
             outbound_messages.put(_out)
             if ctx:
@@ -300,6 +300,7 @@ def login_handler(request):
                 print 'login succseed'
                 return dbuser
             else:
+                print 'login failed'
                 return None
         except:
             traceback.print_exc()
