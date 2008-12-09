@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-import threading, signal
+import threading, signal, exceptions
 from threading import Thread
 from twisted.internet import reactor
 from serverfactory import serve
@@ -31,5 +31,9 @@ def stop_all(*args):
 signal.signal(signal.SIGINT, stop_all)    
 
 if __name__ == '__main__':
-    run_all()
-    serve(config.Listeners)
+    try:
+        run_all()
+        serve(config.Listeners)
+    # why there is no signal on windows? 
+    except exceptions.KeyboardInterrupt:
+        stop_all()
