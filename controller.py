@@ -9,8 +9,6 @@ from serverfactory import serve
 import config
 import session
 
-
-
 def run_all():
     threads = [session.handle_inbound_queue, 
         session.handle_outbound_queue, 

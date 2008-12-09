@@ -472,6 +472,7 @@ class CallSession(object):
     def _reject(self, reason, request):
         try:
             reject = ServerRejectInvite(client_ctx=request.client_ctx, reason=reason)
+            addr = ctx_table.get_addr(request.client_ctx)
             return CommMessage(addr, ServerRejectInvite, reject.serialize())
         except:
             traceback.print_exc()
