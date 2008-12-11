@@ -263,22 +263,21 @@ def _filter(request):
     except:
         traceback.print_exc()
         
-def touch_client(ctx, time_stamp = time.time(), expire=None):
+def touch_client(ctx): #, time_stamp = time.time(), expire=None):
     try:
-        if not expire:
-            expire = time_stamp + CLIENT_EXPIRE
-        
         if ctx in ctx_table:
+            time_stamp = time.time()
+            expire = time_stamp + CLIENT_EXPIRE
             ctx_table[ctx].last_keep_alive = time_stamp
             ctx_table[ctx].expire = expire
+            print 'last_keep_alive: %s, expire: %s' % (ctx_table[ctx].last_keep_alive, ctx_table[ctx].expire)
+            
     except:
         traceback.print_exc()        
         
 def keep_alive_handler(request):
     try:
         expire = CLIENT_EXPIRE
-        #register last keep alive
-        touch_client(request.client_ctx, time.time(), expire)
         #reply with keep-alive-ack
         kaa = KeepAliveAck()
         
