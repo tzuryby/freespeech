@@ -293,7 +293,7 @@ def keep_alive_handler(request):
 def login_handler(request):
     def verify_login(username, password):
         try:
-            dbuser = users[unicode(username)]
+            dbuser = users.get(unicode(username))
             '''match supplied credentials with the database'''
             if dbuser and str(dbuser.password) == str(password):
                 print 'login succseed'
