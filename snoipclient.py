@@ -103,9 +103,10 @@ class SnoipClient(object):
     def _send(self, data):
         self.client.send(data)
         
-    def feed_rtp(self, rtp_bytes):
+    def feed_rtp(self, rtp_bytes, seq):
         crtp = ClientRTP()
-        crtp.set_values(client_ctx=self.invited_ctx, call_ctx=self.call_ctx, rtp_bytes=rtp_bytes)
+        crtp.set_values(client_ctx=self.invited_ctx, call_ctx=self.call_ctx, 
+            sequence=seq, rtp_bytes_length=len(rtp_bytes), rtp_bytes=rtp_bytes)
         self._send(crtp.pack())
         
     def rtp_received(self, msg):

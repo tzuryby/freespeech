@@ -481,6 +481,8 @@ class ClientRTP(BaseMessage):
         self.seq = [
             ('client_ctx', UUIDField),
             ('call_ctx', UUIDField),
+            ('sequence', IntField),
+            ('rtp_bytes_length', ShortField),
             ('rtp_bytes', StringField, '!%dc' % (32))]
             
         BaseMessage.__init__(self, *args, **kwargs)
@@ -536,4 +538,9 @@ def keyof(_v):
 MessageTypes.keyof = keyof
         
 if __name__ == '__main__':
-    print repr(MessageTypes.kbv(LoginRequest))
+    buf = '\xab\xcd\x00\x06\x00$\x98\x97O\x9d\xc07\xb4t\xc4\xf7\xbc>i\x14\xa1\x17\n\x00\x00\x05\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xf29\xdc\xba'
+    p = Parser()
+    t= p.parse_type(buf)
+    body = p.body(buf)
+    msg = MessageTypes[t](buf = body)
+    print msg

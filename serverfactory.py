@@ -61,7 +61,7 @@ class UDPServer(DatagramProtocol):
         pass
         
     def datagramReceived(self, data, (host, port)):
-        print 'received:', (host, port), data
+        print 'received:', (host, port), repr(data)
         if not (host, port) in self.echoers:
             self.echoers.append((host, port))
         
