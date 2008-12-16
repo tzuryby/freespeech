@@ -342,7 +342,7 @@ def login_handler(request):
             ctx_table.add_client((ctx_id, ctx_data))
             return login_reply(ctx_id, ctx_data)
         else:
-            return deny_login(request)
+            return deny_login()
     except:
         traceback.print_exc()
         
