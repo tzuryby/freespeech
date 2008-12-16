@@ -484,7 +484,7 @@ class ClientRTP(BaseMessage):
             ('call_ctx', UUIDField),
             ('sequence', IntField),
             ('rtp_bytes_length', ShortField),
-            ('rtp_bytes', StringField, '!%dc' % (32))]
+            ('rtp_bytes', StringField, '!%dc' % (4*1024))]
             
         BaseMessage.__init__(self, *args, **kwargs)
         

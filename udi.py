@@ -11,3 +11,6 @@ sc.login('udi', '0'*20)
 time.sleep(3)
 
 sc.send_keep_alive()
+
+time.sleep(24)
+

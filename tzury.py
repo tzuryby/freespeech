@@ -18,9 +18,9 @@ time.sleep(3)
 sc.invite('udi')
 
 #pause and let replies arrive
-time.sleep(12)
+time.sleep(8)
 
-with open('data.rtp', 'r') as lines:
+with open('large_data.rtp', 'r') as lines:
     i = 0
     for line in lines:
         sc.feed_rtp(line, i)

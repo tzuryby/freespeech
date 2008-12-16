@@ -28,7 +28,7 @@ class TcpClient(Thread):
     def run(self):
         data = '^#$_@!#$'
         while data:
-            data = self.socket.recv(1024*4)
+            data = self.socket.recv(1024*6)
             print 'recieved:', repr(data)
             self.recv_callback and self.recv_callback(data)
             
@@ -41,7 +41,6 @@ class SnoipClient(object):
         self.call_ctx  = None
         self.client_ctx = None
         self.username = None
-        
         self.client = TcpClient((host, port), self.recv)
         self.parser = Parser()
         self.client.start()
@@ -112,8 +111,8 @@ class SnoipClient(object):
     def rtp_received(self, msg):
         bytes = msg.rtp_bytes.value
         with open(self.username + '_incoming_rtp', 'a') as f:
-            f.write(bytes)
-            
+            f.write(line + '\n')
+                
     def send_keep_alive(self):
         ka = KeepAlive()
         ka.set_values( client_ctx = self.client_ctx, 
@@ -163,4 +162,3 @@ def client_invite_ack(invite):
     
     print 'will ack invite of call_ctx:', repr(invite.call_ctx.value)
     return cia.pack()
-    
