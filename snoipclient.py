@@ -111,7 +111,7 @@ class SnoipClient(object):
     def rtp_received(self, msg):
         bytes = msg.rtp_bytes.value
         with open(self.username + '_incoming_rtp', 'a') as f:
-            f.write(line + '\n')
+            f.write(bytes + '\n')
                 
     def send_keep_alive(self):
         ka = KeepAlive()
