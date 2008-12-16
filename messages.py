@@ -227,16 +227,17 @@ class BaseMessage(object):
     buf = None
     
     def __init__(self, *args, **kwargs):
-        try:
-            if 'buf' in kwargs:
-                self.deserialize(kwargs['buf'])
-                
-            elif 'length' in kwargs:
-                self.buf = create_string_buffer(kwargs['length'])
-                
-            self.type_code = MessageTypes.keyof(self)
-        except:
-            traceback.print_exc()
+        #try:
+        if 'buf' in kwargs:
+            self.deserialize(kwargs['buf'])
+            
+        elif 'length' in kwargs:
+            self.buf = create_string_buffer(kwargs['length'])
+
+        self.type_code = MessageTypes.keyof(self)
+            
+        #except:
+        #    traceback.print_exc()
         
     def _init_buffer(self, newbuffer=None):
         try:
@@ -492,12 +493,12 @@ class CallHangup(SignalingMessage):
         self.seq = [
             ('client_ctx', UUIDField),
             ('call_ctx', UUIDField)]
-        BaseMessage.__init__(self, *args, **kwargs)
-          
-    
+            
+        SignalingMessage.__init__(self, *args, **kwargs)
+        
 class CallHangupAck(CallHangup):
     def __init__(self, *args, **kwargs):
-        Hangup.__init__(self, *args, **kwargs)
+        CallHangup.__init__(self, *args, **kwargs)
         
 class ServerOverloaded(BaseMessage):
     def __init__(self, *args, **kwargs):
@@ -524,23 +525,22 @@ MessageTypes = Storage({
     
     '\x00\x20': ClientRTP,
 
-    '\x00\x30': CallHangup,
-    '\x00\x31': CallHangupAck,
+    '\x00\x40': CallHangup,
+    '\x00\x41': CallHangupAck,
     
     '\x00\xa0': ServerOverloaded
 })
 
 def keyof(_v):
     for k,v in MessageTypes.iteritems():
-        if isinstance(_v, v) or _v == v:
+        if _v == v or isinstance(_v, v):
             return k
             
 MessageTypes.keyof = keyof
         
 if __name__ == '__main__':
-    buf = '\xab\xcd\x00\x06\x00$\x98\x97O\x9d\xc07\xb4t\xc4\xf7\xbc>i\x14\xa1\x17\n\x00\x00\x05\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xf29\xdc\xba'
-    p = Parser()
-    t= p.parse_type(buf)
-    body = p.body(buf)
-    msg = MessageTypes[t](buf = body)
-    print msg
+    import uuid
+    call, client = uuid.uuid4().hex, uuid.uuid4().hex
+    ch = CallHangup()
+    ch.set_values(call_ctx = call, client_ctx=client)
+    print ch
