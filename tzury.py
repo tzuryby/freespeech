@@ -9,7 +9,7 @@ import time
 sc = SnoipClient(('localhost', 50009))
 
 #login 
-sc.login('tzury2', '0'*20)
+sc.login('tzury', '0'*20)
 
 #pause and let replies arrive
 time.sleep(3)
