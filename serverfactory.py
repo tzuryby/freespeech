@@ -44,7 +44,7 @@ class TCPServerFactory(ServerFactory):
     def send_to(self, (host, port), data):
         for e in self.echoers:
             if e.transport.client == (host, port):
-                print 'TCPServerFactory.send_to', (host, port), repr(data)
+                #print 'TCPServerFactory.send_to', (host, port), repr(data)
                 e.transport.write(data)
                 return True
                 
@@ -61,7 +61,7 @@ class UDPServer(DatagramProtocol):
         pass
         
     def datagramReceived(self, data, (host, port)):
-        print 'received:', (host, port), repr(data)
+        #print 'received:', (host, port), repr(data)
         if not (host, port) in self.echoers:
             self.echoers.append((host, port))
         

@@ -4,7 +4,7 @@ from twisted.internet import reactor
 # Here's a UDP version of the simplest possible protocol
 class UDPServer(DatagramProtocol):
     def datagramReceived(self, datagram, address):
-        print 'received: %d' % len(datagram)
+        print 'received: %d bytes' % len(datagram)
 
 
 class UDPClient(DatagramProtocol):
@@ -21,7 +21,7 @@ class UDPClient(DatagramProtocol):
         #reactor.stop()
 
     def datagramReceived(self, datagram, host):
-        print 'Datagram received: ', repr(datagram)
+        print 'Datagram received %d bytes' % len(datagram)
         self.sendDatagram()
 
 

@@ -31,7 +31,7 @@ class UdpClient(Thread):
         data = '^#$_@!#$'
         while data:
             data = self.socket.recv(1024*6)
-            print 'recieved:', repr(data)
+            print 'recieved: %d bytes' % len(data)
             self.recv_callback and self.recv_callback(data)
         
 
@@ -50,7 +50,7 @@ class TcpClient(Thread):
         data = '^#$_@!#$'
         while data:
             data = self.socket.recv(1024*6)
-            print 'recieved:', repr(data)
+            print 'recieved: %d bytes' % len(data)
             self.recv_callback and self.recv_callback(data)
             
     def close(self):
@@ -68,7 +68,7 @@ class SnoipClient(object):
         
     def recv(self, data):
         msg_type, buf = self.parser.body(data)
-        print 'msg_type', msg_type
+        print 'msg_type', repr(msg_type)
         if msg_type in MessageTypes:
             msg = MessageTypes[msg_type](buf=buf)
             if isinstance(msg, LoginReply):
@@ -77,7 +77,7 @@ class SnoipClient(object):
                 self.ack_invite(msg)
             elif isinstance(msg, ServerForwardRing):
                 self.invited_ctx = msg.client_ctx.value
-                print '60:current call_ctx', repr(self.call_ctx), 'new call_ctx', repr(msg.call_ctx.value)
+                #print 'current call_ctx', repr(self.call_ctx), 'new call_ctx', repr(msg.call_ctx.value)
                 self.call_ctx = msg.call_ctx.value
                 print 'ringing...'
             elif isinstance(msg, ClientAnswer):
@@ -106,7 +106,7 @@ class SnoipClient(object):
         
     def ack_invite(self, sfi):
         print 'snoipclient-ack_invite'
-        print '87:current call_ctx', repr(self.call_ctx), 'new call_ctx', repr(sfi.call_ctx.value)
+        #print 'current call_ctx', repr(self.call_ctx), 'new call_ctx', repr(sfi.call_ctx.value)
         self.call_ctx = sfi.call_ctx.value
         data = client_invite_ack(sfi)
         self._send(data)
