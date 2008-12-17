@@ -270,7 +270,7 @@ def touch_client(ctx): #, time_stamp = time.time(), expire=None):
             expire = time_stamp + CLIENT_EXPIRE
             ctx_table[ctx].last_keep_alive = time_stamp
             ctx_table[ctx].expire = expire
-            print 'last_keep_alive: %s, expire: %s' % (ctx_table[ctx].last_keep_alive, ctx_table[ctx].expire)
+            #print 'last_keep_alive: %s, expire: %s' % (ctx_table[ctx].last_keep_alive, ctx_table[ctx].expire)
             
     except:
         traceback.print_exc()        
