@@ -14,6 +14,27 @@ from config import Codecs, ClientStatus
 from decorators import printargs
 
 
+class UdpClient(Thread):
+    def __init__(self, (host, port), recv_callback = None):
+        Thread.__init__(self)
+        self.host, self.port= host, port
+        self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+        self.recv_callback = recv_callback
+        
+    def send(self, msg):
+        self.socket.sendto(msg, (self.host, self.port))
+
+    def close(self):
+        self.socket.close()
+        
+    def run(self):
+        data = '^#$_@!#$'
+        while data:
+            data = self.socket.recv(1024*6)
+            print 'recieved:', repr(data)
+            self.recv_callback and self.recv_callback(data)
+        
+
 class TcpClient(Thread):
     def __init__(self, (host, port), recv_callback = None):
         Thread.__init__(self)
@@ -41,7 +62,7 @@ class SnoipClient(object):
         self.call_ctx  = None
         self.client_ctx = None
         self.username = None
-        self.client = TcpClient((host, port), self.recv)
+        self.client = UdpClient((host, port), self.recv)
         self.parser = Parser()
         self.client.start()
         
