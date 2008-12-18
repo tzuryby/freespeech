@@ -6,6 +6,7 @@ from snoipclient import SnoipClient
 import time
 
 sc = SnoipClient(('localhost', 50009))
+time.sleep(1)
 sc.login('udi', '0'*20)
 
 time.sleep(3)

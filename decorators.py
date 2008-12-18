@@ -2,6 +2,7 @@
 # -*- coding: UTF-8 -*-
 
 __all__ = ['printargs']
+from logger import log
 
 def printargs(fn, *args, **kwargs):
     def wrapper(*args, **kwargs):

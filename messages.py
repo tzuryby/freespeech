@@ -24,6 +24,7 @@ from ctypes import create_string_buffer
 from md5 import new as md5
 from decorators import printargs
 from utils import Storage
+from logger import log
 
 def string_to_ctx(*args):
     v = ''.join(args)
@@ -100,7 +101,7 @@ class CommMessage(object):
             
         elif isinstance(self.msg, (LoginRequest,)):
             client_ctx = string_to_ctx(self.msg.username.value)
-            print 'a new client_ctx', 'username:' , self.msg.username.value, 'ctx:', repr(client_ctx)
+            log.info('a new client_ctx', 'username: %s ctx: %s' %(self.msg.username.value ,repr(client_ctx)))
             self.client_ctx = client_ctx
             
         self.call_ctx = hasattr(self.msg, 'call_ctx') and self.msg.call_ctx.value
@@ -122,16 +123,18 @@ class Field(object):
         try:
             struct.pack_into(self.format, buf, self.start, *self._value)
         except Exception, inst:
-            print 'Error @ calling startuct.pack_into with:'
-            print 'format', self.format, 'buffer', repr(buf), 'start', self.start, 'value', self._value
+            log.exception('exception')
+            #print 'Error @ calling startuct.pack_into with:'
+            #print 'format', self.format, 'buffer', repr(buf), 'start', self.start, 'value', self._value
         
     def unpack_from(self, buf):
         try:
             '''unpack the value from a supplied buffer'''
             self.value = struct.unpack_from(self.format, buf, self.start)
         except Exception, inst:
-            print 'Error @ calling startuct.unpack_from with:'
-            print 'format', self.format, 'buffer', repr(buf), 'start', self.start, 'value', self._value
+            log.exception('exception')
+            #print 'Error @ calling startuct.unpack_from with:'
+            #print 'format', self.format, 'buffer', repr(buf), 'start', self.start, 'value', self._value
             
     def __setattr__(self, k, v):
         '''a wrapper around x.value ensure _value will always be a tuple'''
@@ -177,8 +180,9 @@ class StringField(Field):
         try:
             Field.__init__(self, start, format, name)
         except:
-            print 'error@StringField.__init__\nstart %s, format %s, name %s' % (
-                start, format, name)
+            log.exception('exception')
+            #print 'error@StringField.__init__\nstart %s, format %s, name %s' % (
+            #    start, format, name)
             
     def __setattr__(self, k, v):
         try:
@@ -191,8 +195,9 @@ class StringField(Field):
             else:
                 self.__dict__[k] = v
         except:
-            print 'error@StringField.__setattr__\nname %s, k %s,v %s, format %s, length %s' % (
-                self.name, k, v, self.format, self.length)
+            log.exception('exception')
+            #print 'error@StringField.__setattr__\nname %s, k %s,v %s, format %s, length %s' % (
+            #    self.name, k, v, self.format, self.length)
             
     def __getattr__(self, k):
         if k == 'value':
@@ -227,7 +232,6 @@ class BaseMessage(object):
     buf = None
     
     def __init__(self, *args, **kwargs):
-        #try:
         if 'buf' in kwargs:
             self.deserialize(kwargs['buf'])
             
@@ -235,9 +239,6 @@ class BaseMessage(object):
             self.buf = create_string_buffer(kwargs['length'])
 
         self.type_code = MessageTypes.keyof(self)
-            
-        #except:
-        #    traceback.print_exc()
         
     def _init_buffer(self, newbuffer=None):
         try:
@@ -256,14 +257,14 @@ class BaseMessage(object):
                 elif isinstance(newbuffer,str):
                     self.buf.raw = newbuffer
         except:
-            traceback.print_exc()
+            log.exception('exception')
             
     def _create_buffer(self, length=0):
         try:
             '''alocates a writeable buffer'''
             return create_string_buffer(length)
         except:
-            traceback.print_exc()        
+            log.exception('exception')        
         
     def deserialize(self, buf=None):
         try:
@@ -272,14 +273,14 @@ class BaseMessage(object):
                 
             self._set_values(self.seq)        
         except:
-            traceback.print_exc()
+            log.exception('exception')
         
     def set_values(self, **kwargs):
         try:
             items = (p for p in self.seq if p[0] in kwargs)
             self._set_values(items, kwargs)
         except:
-            traceback.print_exc()
+            log.exception('exception')
             
     def dict_fields(self):
         try:
@@ -289,7 +290,7 @@ class BaseMessage(object):
                         self.__dict__[field[0]].value) for field in self.seq))
             return x
         except:
-            traceback.print_exc()        
+            log.exception('exception')        
         
     def _set_values(self, items, values_dict=None):
         try:
@@ -318,7 +319,7 @@ class BaseMessage(object):
                 #next field starting point
                 start = self.__dict__[key].end
         except:
-            traceback.print_exc()
+            log.exception('exception')
             
     def _pack_values(self):
         try:
@@ -327,7 +328,7 @@ class BaseMessage(object):
             for v in self.seq:
                 self.__dict__[v[0]].pack_into(self.buf)
         except:
-            traceback.print_exc()
+            log.exception('exception')
             
     def serialize(self):
         try:
@@ -335,7 +336,7 @@ class BaseMessage(object):
             self._pack_values()
             return self.buf.raw
         except:
-            traceback.print_exc()        
+            log.exception('exception')        
         
     def __repr__(self):
         return repr(self.pack())
@@ -345,7 +346,7 @@ class BaseMessage(object):
             '''packs the buffer and make it ready to ship'''
             return message_framer.frame(self.type_code, self.serialize())
         except:
-            traceback.print_exc()
+            log.exception('exception')
             
 class ShortResponse(BaseMessage):
     def __init__(self, *args, **kwargs):
@@ -428,7 +429,7 @@ class ServerRejectInvite(ShortResponse):
         if ('client_ctx' in kwargs or 'reason' in kwargs) and 'buf' not in kwargs:
             self.set_values(client_ctx = kwargs['client_ctx'], reason = kwargs['reason'])
         else:
-            print ('Incorrect parameters')
+            log.warning('Incorrect parameters')
             
 class ServerForwardInvite(SignalingMessage):
     def __init__(self, *args, **kwargs):

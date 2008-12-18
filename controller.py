@@ -5,7 +5,7 @@ import threading, signal, exceptions
 from threading import Thread
 from twisted.internet import reactor
 from serverfactory import serve
-
+from logger import log
 import config
 import session
 
@@ -21,7 +21,7 @@ def run_all():
 def stop_all(*args):
     
     #stop the reactor
-    print '\ntermination process started...\nterminating reactor\'s mainloop'
+    log.info( 'termination process started... terminating reactor\'s mainloop')
     reactor.stop()
     #stop flag for threads at session module (started at start_all() function above)
     session.thread_loop_active = False

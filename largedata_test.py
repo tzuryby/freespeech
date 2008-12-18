@@ -1,5 +1,6 @@
 from twisted.internet.protocol import DatagramProtocol
 from twisted.internet import reactor
+from logger import log
 
 # Here's a UDP version of the simplest possible protocol
 class UDPServer(DatagramProtocol):

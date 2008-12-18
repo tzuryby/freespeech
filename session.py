@@ -11,7 +11,9 @@ from messages import *
 from utils import Storage
 from config import *
 from decorators import printargs
+from logger import log
 from twisted.internet import reactor
+from logger import log
 
 
 rlock = lambda: threading.RLock()
@@ -37,13 +39,13 @@ class Packer(object):
                     cm = CommMessage(client, ctr, buf)
                     self.queue.put(cm)                    
                 else:
-                    print 'Packer.pack() >>> not a valid message', msg
+                    log.warning('Packer.pack() >>> not a valid message %s' % msg)
                 
                 del self.clients[client]
             else:
-                print 'Packer.pack() >>> eof not found, waiting for more bytes'
+                log.warning('Packer.pack() >>> eof not found, waiting for more bytes')
         except:
-            traceback.print_exc()
+            log.exception('exception')
             
     # receives the message and store it in the clients[client]
     def _recv(self, client, msg):
@@ -54,7 +56,7 @@ class Packer(object):
             else:
                 self.clients[client] = self.clients[client] + msg
         except:
-            traceback.print_exc()
+            log.exception('exception')
 
 '''a pool of all the listeners (tcp+udp) and thier known clients'''
 class ServersPool(Storage):
@@ -133,7 +135,7 @@ def recv_msg(caller, (host, port), msg):
         '''every server, onDataReceived call this function with the data'''
         msg_packer.pack((host, port), msg)
     except:
-        traceback.print_exc()
+        log.exception('exception')
             
 def create_client_context(comm_msg, status=ClientStatus.Unknown):
     try:
@@ -154,7 +156,7 @@ def create_client_context(comm_msg, status=ClientStatus.Unknown):
         else:
             return None
     except:
-        traceback.print_exc()
+        log.exception('exception')
             
 def create_call_ctx(request):
     try:
@@ -177,7 +179,7 @@ def create_call_ctx(request):
         )
         return (ctx_id, ctx)
     except:
-        traceback.print_exc()
+        log.exception('exception')
     
 def remove_old_clients():
     try:
@@ -186,7 +188,7 @@ def remove_old_clients():
             expired_clients = [client.ctx_id for client in ctx_table.clients() if client.expire < now]
             
             for ctx_id in expired_clients:
-                print 'removing inactive client', repr(ctx_id)
+                log.info('removing inactive client ' + repr(ctx_id))
                 ctx_table.remove_client(ctx_id)
                     
             for i in xrange(CLIENT_EXPIRE):
@@ -195,9 +197,9 @@ def remove_old_clients():
                 else:
                     break
                 
-        print 'terminating thread: remove_old_clients'
+        log.info('terminating thread: remove_old_clients')
     except:
-        traceback.print_exc()
+        log.exception('exception')
     
 def handle_inbound_queue():
     try:
@@ -209,29 +211,28 @@ def handle_inbound_queue():
             except Queue.Empty:
                 time.sleep(0.010)
                 
-        print 'terminating thread: handle_inbound_queue'
+        log.info('terminating thread: handle_inbound_queue')
     except:
-        traceback.print_exc()
+        log.exception('exception')
         
 def handle_outbound_queue():
     while thread_loop_active:
         try:
             reply = outbound_messages.get(block=0)
             if reply and hasattr(reply, 'msg') and hasattr(reply, 'addr'):
-                print 'server reply or forward a message to', reply.addr
+                log.debug('server reply or forward a message to %s' % repr(reply.addr))
                 try:
                     data = reply.msg.pack()
                     reactor.callFromThread(servers_pool.send_to,reply.addr, data)
                 except Exception, inst:
-                    print 'error while calling reactor.callFromThread at handle_outbound_queue'
-                    print Exception, inst
+                    log.exception('exception')
                     
         except Queue.Empty:
             time.sleep(0.010)
         except:
-            traceback.print_exc()
+            log.exception('exception')
             
-    print 'terminating thread: handle_outbound_queue'
+    log.info('terminating thread: handle_outbound_queue')
     
 def _filter(request):
     try:
@@ -242,7 +243,8 @@ def _filter(request):
         
         if not ctx and msg_type != LoginRequest or (
             ctx and ctx not in ctx_table.clients_ctx()):
-            print 'filter is throwing away unknown msg_type/client_ctx: %s, %s, %s'  %(repr(ctx), repr(msg_type), repr(msg))
+            log.warning('filter is throwing away unknown msg_type/client_ctx: %s, %s, %s'  
+                %(repr(ctx), repr(msg_type), repr(msg)))
             
         else:
             switch = {
@@ -261,7 +263,7 @@ def _filter(request):
             if ctx:
                 touch_client(request.client_ctx)
     except:
-        traceback.print_exc()
+        log.exception('exception')
         
 def touch_client(ctx): #, time_stamp = time.time(), expire=None):
     try:
@@ -271,9 +273,10 @@ def touch_client(ctx): #, time_stamp = time.time(), expire=None):
             ctx_table[ctx].last_keep_alive = time_stamp
             ctx_table[ctx].expire = expire
             #print 'last_keep_alive: %s, expire: %s' % (ctx_table[ctx].last_keep_alive, ctx_table[ctx].expire)
+            #print 'last_keep_alive: %s, expire: %s' % (ctx_table[ctx].last_keep_alive, ctx_table[ctx].expire)
             
     except:
-        traceback.print_exc()        
+        log.exception('exception')        
         
 def keep_alive_handler(request):
     try:
@@ -288,7 +291,7 @@ def keep_alive_handler(request):
         
         return CommMessage(request.addr, KeepAliveAck, kaa.serialize())
     except:
-        traceback.print_exc()
+        log.exception('exception')
     
 def login_handler(request):
     def verify_login(username, password):
@@ -296,13 +299,13 @@ def login_handler(request):
             dbuser = users.get(unicode(username))
             '''match supplied credentials with the database'''
             if dbuser and str(dbuser.password) == str(password):
-                print 'login succseed'
+                log.info('login succseed')
                 return dbuser
             else:
-                print 'login failed'
+                log.info('login failed')
                 return None
         except:
-            traceback.print_exc()
+            log.exception('exception')
 
             
     def login_reply(ctx_id, ctx_data):
@@ -315,10 +318,10 @@ def login_handler(request):
                 client_public_port=port, ctx_expire=ctx_table[ctx_id].expire - time.time(), 
                 num_of_codecs=len(codecs), codec_list=''.join((c for c in codecs)))
             buf = lr.serialize()
-            print 'login reply', repr(buf)
+            log.debug('login reply') # %s' % repr(buf))
             return CommMessage(request.addr, LoginReply, buf)
         except:
-            traceback.print_exc()
+            log.exception('exception')
         
     def deny_login():
         try:
@@ -328,10 +331,10 @@ def login_handler(request):
                 client_ctx = ('\x00 '*16).split(),
                 result = struct.unpack('!h', Errors.LoginFailure))
             buf = ld.serialize()
-            print 'login error'    
+            log.info('login error')
             return CommMessage(request.addr, ShortResponse, buf)
         except:
-            traceback.print_exc()
+            log.exception('exception')
         
     try:
         username, password = request.msg.username.value, request.msg.password.value
@@ -344,14 +347,14 @@ def login_handler(request):
         else:
             return deny_login()
     except:
-        traceback.print_exc()
+        log.exception('exception')
         
 def logout_handler(request):
     try:
         with rlock():
             ctx_table.remove_client(request.client_ctx)
     except:
-        traceback.print_exc()
+        log.exception('exception')
 
 class CallSession(object):
     '''Utility class handles all requests/responses regarding a call session'''
@@ -364,7 +367,7 @@ class CallSession(object):
             elif isinstance(request.msg, ClientRTP):
                 return self._handle_rtp(request)
         except:
-            traceback.print_exc()
+            log.exception('exception')
             
     def _handle_invite(self, request):
         try:
@@ -381,7 +384,7 @@ class CallSession(object):
                 
             #todo: add here `away-status` case handler
             matched_codecs = self._matched_codecs(request.msg.codec_list.value)
-            print 'matched_codecs:', matched_codecs
+            log.debug('matched_codecs: %s' % matched_codecs)
             # caller codecs do not match with the server's
             if not matched_codecs:
                 return self._reject(config.Errors.CodecMismatch, request)
@@ -393,7 +396,7 @@ class CallSession(object):
                 # send ServerForwardInvite to the calle
                 return self._forward_invite(call_ctx, matched_codecs)
         except:
-            traceback.print_exc()
+            log.exception('exception')
             
     def _forward_invite(self, call_ctx, matched_codecs):
         try:
@@ -419,7 +422,7 @@ class CallSession(object):
             sfi_buffer = sfi.serialize()
             return CommMessage(ctx_table.get_addr(calle_ctx), ServerForwardInvite, sfi_buffer)
         except:
-            traceback.print_exc()
+            log.exception('exception')
         
     def _matched_codecs(self, client_codecs):
         try:
@@ -429,7 +432,7 @@ class CallSession(object):
             matched_codecs = [codec for codec in client_codecs if codec in server_codecs]
             return len(matched_codecs) and matched_codecs
         except:
-            traceback.print_exc()
+            log.exception('exception')
             
     def _handle_signaling(self, request):
         try:
@@ -448,11 +451,11 @@ class CallSession(object):
                         buf = msg.serialize()
                         ctr = ClientAnswer                
             else:
-                print '_handle_signaling: call is out of context', repr(call_ctx)
+                log.warning('_handle_signaling: call is out of context %s' % repr(call_ctx))
                 
             return ctr and CommMessage(caller_addr, ctr, buf)
         except:
-            traceback.print_exc()
+            log.exception('exception')
         
     def _handle_rtp(self, request):
         try:
@@ -464,9 +467,9 @@ class CallSession(object):
                 request.addr = ctx_table.get_addr(forward_to)
                 return request
             else:    
-                print self, '_handle_rtp: call is out of context', repr(call_ctx)
+                log.warning('%s _handle_rtp: call is out of context %s' % (repr(self) ,repr(call_ctx)))
         except:
-            traceback.print_exc()
+            log.exception('exception')
             
     def _reject(self, reason, request):
         try:
@@ -474,7 +477,7 @@ class CallSession(object):
             addr = ctx_table.get_addr(request.client_ctx)
             return CommMessage(addr, ServerRejectInvite, reject.serialize())
         except:
-            traceback.print_exc()
+            log.exception('exception')
         
     def _forward_invite_ack(self, cia, call_type = CallTypes.ViaProxy):
         try:
@@ -489,7 +492,7 @@ class CallSession(object):
             buf = sfr.serialize()
             return buf
         except:
-            traceback.print_exc()
+            log.exception('exception')
         
 #########################################
 # all module Singletons

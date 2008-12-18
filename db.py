@@ -10,6 +10,7 @@ __all__ = ['db']
 
 import sqlite3
 from utils import Storage
+from logger import log
 
 class _db(object):
     def __init__(self):

@@ -14,13 +14,14 @@ from twisted.internet import reactor
 
 import session
 from utils import Storage
+from logger import log
         
 class TCPServer(Protocol):
     dataReceivedHandler = session.recv_msg
         
     def connectionMade(self):
         self.factory.echoers.append(self)
-        print 'tcp_connection from', self.transport.client
+        log.info('tcp_connection from %s' % repr(self.transport.client))
         
     def dataReceived(self, data):
         host, port = self.transport.client
@@ -29,7 +30,7 @@ class TCPServer(Protocol):
     def connectionLost(self, reason):
         #todo: -> remove this client form the session_ctx_table
         
-        print 'connection Lost'
+        log.info('connection Lost')
         self.factory.echoers.remove(self)
         
 
@@ -91,7 +92,7 @@ def serve(listeners):
         starter = starters[proto]()
         reactor_listen[proto](port, starter)
         session.servers_pool.add(proto, starter)
-        print 'serving %s on port %s' % (proto, port)
+        log.info( 'serving %s on port %s' % (proto, port))
         
     reactor.run(installSignalHandlers=0)
     

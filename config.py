@@ -2,6 +2,7 @@
 # -*- coding: UTF-8 -*-
 
 from utils import Storage
+from logger import log
 
 #60 Seconds
 CLIENT_EXPIRE = 60

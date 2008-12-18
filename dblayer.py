@@ -4,6 +4,7 @@
 import re
 from db import db
 from utils import Storage
+from logger import log
 
 __all__ = ['Config', 'Users']
     
