@@ -12,7 +12,7 @@ import sqlite3
 from utils import Storage
 from logger import log
 
-class _db(object):
+class DB(object):
     def __init__(self):
         self.dbname = '.freespeech.db'
         self.conn = None
@@ -21,7 +21,7 @@ class _db(object):
         try:
             self.conn = sqlite3.connect(to or self.dbname)
         except:
-            raise 'error connecting to db %s' % self.dbname
+            raise Exception('error connecting to db %s' % self.dbname)
             
     def cursor(self):
         self.connect()
@@ -75,4 +75,4 @@ class _db(object):
         _where = ('where' in kwargs and ' WHERE %s ' % kwargs['where']) or ''
         self.execute(_update + _set + _where)
         
-db = _db()
+db = DB()
