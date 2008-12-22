@@ -18,9 +18,7 @@ class UDPClient(DatagramProtocol):
         lines = (line for line in open('large_data.rtp', 'r'))
         for line in lines:
             self.transport.write(line)
-        
-        #reactor.stop()
-
+            
     def datagramReceived(self, datagram, host):
         print 'Datagram received %d bytes' % len(datagram)
         self.sendDatagram()

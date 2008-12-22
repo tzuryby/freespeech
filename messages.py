@@ -428,7 +428,7 @@ class ServerRejectInvite(ShortResponse):
         
         if ('client_ctx' in kwargs or 'reason' in kwargs) and 'buf' not in kwargs:
             self.set_values(client_ctx = kwargs['client_ctx'], reason = kwargs['reason'])
-        else:
+        elif 'buf' not in kwargs:
             log.warning('Incorrect parameters')
             
 class ServerForwardInvite(SignalingMessage):
