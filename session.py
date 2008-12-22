@@ -220,7 +220,7 @@ def handle_outbound_queue():
         try:
             reply = outbound_messages.get(block=0)
             if reply and hasattr(reply, 'msg') and hasattr(reply, 'addr'):
-                log.debug('server reply or forward a message to %s' % repr(reply.addr))
+                log.debug('server reply or forward a message %s to %s' % (reply.msg_type, repr(reply.addr)))
                 try:
                     data = reply.msg.pack()
                     reactor.callFromThread(servers_pool.send_to,reply.addr, data)
@@ -473,6 +473,7 @@ class CallSession(object):
             
     def _reject(self, reason, request):
         try:
+            log.info('server reject invite CTX:%s, Reason: %s' % (repr(request.client_ctx), repr(reason)))
             reject = ServerRejectInvite(client_ctx=request.client_ctx, reason=reason)
             addr = ctx_table.get_addr(request.client_ctx)
             return CommMessage(addr, ServerRejectInvite, reject.serialize())

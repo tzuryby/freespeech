@@ -10,7 +10,7 @@ class Logger:
     def __init__(self):
                 
         self.file_frmt = lg.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-        self.stream_frmt = lg.Formatter('%(levelname)s - %(message)s')
+        self.stream_frmt = lg.Formatter('%(asctime)s - %(levelname)s - %(message)s')
         
         self.logger = lg.getLogger('snoip.freespeech')
         self.logger.setLevel(lg.DEBUG)
