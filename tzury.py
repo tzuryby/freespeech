@@ -9,13 +9,13 @@ import time
 sc = SnoipClient(('localhost', 50009))
 
 #login 
-sc.login('tzury', '0'*20)
+sc.login('121', 'a121----------------')
 
 #pause and let replies arrive
 time.sleep(3)
 
 #send invite
-sc.invite('udi')
+sc.invite('120')
 
 #pause and let replies arrive
 time.sleep(8)

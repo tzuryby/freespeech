@@ -10,6 +10,7 @@ messages.py (part of freespeech.py)
 __author__ = 'Tzury Bar Yochay'
 __version__ = '0.1'
 __license__ = 'GPLv3'
+
 __all__ = ['Parser', 'MessageFramer', 'BaseMessage', 'ByteField', 'CharField', 'ClientAnswer', 
     'CallHangup', 'CallHangupAck', 'ClientInvite', 'ClientInviteAck', 
     'ClientRTP', 'CommMessage', 'Field', 'IPField', 'IntField', 'KeepAlive', 
@@ -29,8 +30,6 @@ from logger import log
 def string_to_ctx(*args):
     v = ''.join(args)
     return md5(v).digest()
-
-
 
 MessageFactory = Storage(
     create= lambda msg_type, buf: msg_type in MessageTypes and MessageTypes[msg_type](buf=buf) or None )
@@ -91,12 +90,13 @@ class CommMessage(object):
     def __init__(self, addr, msg_type, body):
         self.addr = addr
         self.msg_type = msg_type
+        print 'typeof(body)', type(body)
         self.body = body
         self.msg = msg_type(buf=body)
         self.client_ctx = None
         
         # for login request create new context, for others extract from the message
-        if (hasattr(self.msg, 'client_ctx')):
+        if (getattr(self.msg, 'client_ctx', None)):
             self.client_ctx = self.msg.client_ctx.value
             
         elif isinstance(self.msg, (LoginRequest,)):
@@ -124,17 +124,13 @@ class Field(object):
             struct.pack_into(self.format, buf, self.start, *self._value)
         except Exception, inst:
             log.exception('exception')
-            #print 'Error @ calling startuct.pack_into with:'
-            #print 'format', self.format, 'buffer', repr(buf), 'start', self.start, 'value', self._value
-        
+            
     def unpack_from(self, buf):
         try:
             '''unpack the value from a supplied buffer'''
             self.value = struct.unpack_from(self.format, buf, self.start)
         except Exception, inst:
             log.exception('exception')
-            #print 'Error @ calling startuct.unpack_from with:'
-            #print 'format', self.format, 'buffer', repr(buf), 'start', self.start, 'value', self._value
             
     def __setattr__(self, k, v):
         '''a wrapper around x.value ensure _value will always be a tuple'''
@@ -237,8 +233,9 @@ class BaseMessage(object):
             
         elif 'length' in kwargs:
             self.buf = create_string_buffer(kwargs['length'])
-
+            
         self.type_code = MessageTypes.keyof(self)
+        print self, repr(MessageTypes.keyof(self))
         
     def _init_buffer(self, newbuffer=None):
         try:
@@ -339,7 +336,7 @@ class BaseMessage(object):
             log.exception('exception')        
         
     def __repr__(self):
-        return repr(self.pack())
+        return self.type_code
         
     def pack(self):
         try:
@@ -423,17 +420,8 @@ class ClientInvite(SignalingMessage):
         SignalingMessage.__init__(self, *args, **kwargs)
         
 class ServerRejectInvite(ShortResponse):
-    pass
-    ''''''
-    #def __init__(self, *args, **kwargs):
-    #    ShortResponse.__init__(self, *args, **kwargs)
-        
-        #if ('client_ctx' in kwargs or 'result' in kwargs):
-        #    self.set_values(client_ctx = kwargs['client_ctx'], reason = kwargs['result'])
-        #elif 'buf' not in kwargs:
-        #    log.warning('Neither values nor buffer supplied. can\'t build a reject invite')
-            
-        #print 'kwargs', kwargs
+    def __init__(self, *args, **kwargs):
+        ShortResponse.__init__(self, *args, **kwargs)
         
 class ServerForwardInvite(SignalingMessage):
     def __init__(self, *args, **kwargs):
@@ -544,8 +532,9 @@ def keyof(_v):
 MessageTypes.keyof = keyof
         
 if __name__ == '__main__':
-    import uuid
-    call, client = uuid.uuid4().hex, uuid.uuid4().hex
+    call, client = string_to_ctx('foo'), string_to_ctx('bar')
     ch = CallHangup()
     ch.set_values(call_ctx = call, client_ctx=client)
-    print ch
+
+#print repr(ch.pack())
+    

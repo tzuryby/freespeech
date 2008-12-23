@@ -19,3 +19,4 @@ if __name__ == '__main__':
         print 'Hello'
         
     bar(1,2,3)
+    

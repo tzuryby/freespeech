@@ -106,7 +106,6 @@ class SnoipClient(object):
         
     def ack_invite(self, sfi):
         print 'snoipclient-ack_invite'
-        #print 'current call_ctx', repr(self.call_ctx), 'new call_ctx', repr(sfi.call_ctx.value)
         self.call_ctx = sfi.call_ctx.value
         data = client_invite_ack(sfi)
         self._send(data)

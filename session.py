@@ -15,7 +15,6 @@ from logger import log
 from twisted.internet import reactor
 from logger import log
 
-
 rlock = lambda: threading.RLock()
 
 thread_loop_active = True
@@ -207,6 +206,8 @@ def handle_inbound_queue():
             try:
                 req = inbound_messages.get(block=0)
                 if req:
+                    log.debug('server received %s to %s <<[%s]>>' % (
+                        req.msg_type, repr(req.addr), repr(req.body)))
                     _filter(req)
             except Queue.Empty:
                 time.sleep(0.010)
