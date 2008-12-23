@@ -11,14 +11,40 @@ __author__ = 'Tzury Bar Yochay'
 __version__ = '0.1'
 __license__ = 'GPLv3'
 
-__all__ = ['Parser', 'MessageFramer', 'BaseMessage', 'ByteField', 'CharField', 'ClientAnswer', 
-    'CallHangup', 'CallHangupAck', 'ClientInvite', 'ClientInviteAck', 
-    'ClientRTP', 'CommMessage', 'Field', 'IPField', 'IntField', 'KeepAlive', 
-    'KeepAliveAck', 'LoginReply', 'LoginRequest', 'Logout', 'SignalingMessage', 
+__all__ = [
+    'Parser', 
+    'MessageFramer', 
+    'BaseMessage', 
+    'ByteField', 
+    'CharField', 
+    'ClientAnswer', 
+    'ClientHangupRequest', 
+    'ServerHangupRelay', 
+    'ClientHangupAck',  
+    'ServerHangupAckRelay', 
+    'ClientInvite', 
+    'ClientInviteAck', 
+    'ClientRTP', 
+    'CommMessage', 
+    'Field', 
+    'IPField', 
+    'IntField', 
+    'KeepAlive', 
+    'KeepAliveAck', 
+    'LoginReply', 
+    'LoginRequest', 
+    'Logout', 
+    'SignalingMessage', 
     'ServerForwardInvite', 
-    'ServerForwardRing', 'ServerOverloaded', 
-    'ServerRejectInvite', 'ShortField', 'ShortResponse', 'StringField', 
-    'UUIDField', 'MessageTypes', 'string_to_ctx']
+    'ServerForwardRing', 
+    'ServerOverloaded', 
+    'ServerRejectInvite', 
+    'ShortField', 
+    'ShortResponse', 
+    'StringField', 
+    'UUIDField', 
+    'MessageTypes', 
+    'string_to_ctx']
     
 import struct, uuid, sys, traceback
 from ctypes import create_string_buffer
@@ -90,7 +116,6 @@ class CommMessage(object):
     def __init__(self, addr, msg_type, body):
         self.addr = addr
         self.msg_type = msg_type
-        print 'typeof(body)', type(body)
         self.body = body
         self.msg = msg_type(buf=body)
         self.client_ctx = None
@@ -235,7 +260,6 @@ class BaseMessage(object):
             self.buf = create_string_buffer(kwargs['length'])
             
         self.type_code = MessageTypes.keyof(self)
-        print self, repr(MessageTypes.keyof(self))
         
     def _init_buffer(self, newbuffer=None):
         try:
@@ -480,8 +504,8 @@ class ClientRTP(BaseMessage):
             ('rtp_bytes', StringField, lambda: '!%dc' % self.rtp_bytes_length.value)]
             
         BaseMessage.__init__(self, *args, **kwargs)
-        
-class CallHangup(SignalingMessage):
+    
+class ClientHangupRequest(SignalingMessage):
     def __init__(self, *args, **kwargs):
         self.seq = [
             ('client_ctx', UUIDField),
@@ -489,10 +513,15 @@ class CallHangup(SignalingMessage):
             
         SignalingMessage.__init__(self, *args, **kwargs)
         
-class CallHangupAck(CallHangup):
-    def __init__(self, *args, **kwargs):
-        CallHangup.__init__(self, *args, **kwargs)
-        
+class ServerHangupRelay(ClientHangupRequest):
+    pass
+
+class ClientHangupAck(ClientHangupRequest):
+    pass
+
+class ServerHangupAckRelay(ClientHangupRequest):
+    pass
+
 class ServerOverloaded(BaseMessage):
     def __init__(self, *args, **kwargs):
         self.seq = [('alternate_ip', IPField)]
@@ -518,8 +547,10 @@ MessageTypes = Storage({
     
     '\x00\x20': ClientRTP,
 
-    '\x00\x40': CallHangup,
-    '\x00\x41': CallHangupAck,
+    '\x00\x40': ClientHangupRequest,
+    '\x00\x41': ServerHangupRelay,
+    '\x00\x42': ClientHangupAck,
+    '\x00\x43': ServerHangupAckRelay,
     
     '\x00\xa0': ServerOverloaded
 })
@@ -533,7 +564,7 @@ MessageTypes.keyof = keyof
         
 if __name__ == '__main__':
     call, client = string_to_ctx('foo'), string_to_ctx('bar')
-    ch = CallHangup()
+    ch = ClientHangupRequest()
     ch.set_values(call_ctx = call, client_ctx=client)
 
 #print repr(ch.pack())

@@ -206,7 +206,7 @@ def handle_inbound_queue():
             try:
                 req = inbound_messages.get(block=0)
                 if req:
-                    log.debug('server received %s to %s <<[%s]>>' % (
+                    log.debug('server received %s to %s [%s]' % (
                         req.msg_type, repr(req.addr), repr(req.body)))
                     _filter(req)
             except Queue.Empty:
@@ -221,7 +221,7 @@ def handle_outbound_queue():
         try:
             reply = outbound_messages.get(block=0)
             if reply and hasattr(reply, 'msg') and hasattr(reply, 'addr'):
-                log.debug('server re(p)l(a)y %s to %s <<[%s]>>' % (
+                log.debug('server re(p)l(a)y %s to %s [%s]' % (
                     reply.msg_type, repr(reply.addr), repr(reply.body)))
                 try:
                     data = reply.msg.pack()
@@ -262,14 +262,16 @@ def _filter(request):
                 
             elif isinstance(msg, (SignalingMessage, ClientRTP)):
                 _out = call_session_handler(request)
+                
         if _out:
-            outbound_messages.put(_out)
+            for msg in _out:
+                outbound_messages.put(msg)
             if ctx:
                 touch_client(request.client_ctx)
     except:
         log.exception('exception')
         
-def touch_client(ctx): #, time_stamp = time.time(), expire=None):
+def touch_client(ctx):
     try:
         if ctx in ctx_table:
             time_stamp = time.time()
@@ -291,7 +293,7 @@ def keep_alive_handler(request):
             refresh_contact_list = 0
         )
         
-        return CommMessage(request.addr, KeepAliveAck, kaa.serialize())
+        yield CommMessage(request.addr, KeepAliveAck, kaa.serialize())
     except:
         log.exception('exception')
     
@@ -320,7 +322,7 @@ def login_handler(request):
                 client_public_port=port, ctx_expire=ctx_table[ctx_id].expire - time.time(), 
                 num_of_codecs=len(codecs), codec_list=''.join((c for c in codecs)))
             buf = lr.serialize()
-            log.debug('login reply') # %s' % repr(buf))
+            log.debug('login reply')
             return CommMessage(request.addr, LoginReply, buf)
         except:
             log.exception('exception')
@@ -345,9 +347,9 @@ def login_handler(request):
             #creates new client context and register it
             ctx_id, ctx_data = create_client_context(request, status=dbuser.login_status)    
             ctx_table.add_client((ctx_id, ctx_data))
-            return login_reply(ctx_id, ctx_data)
+            yield login_reply(ctx_id, ctx_data)
         else:
-            return deny_login()
+            yield deny_login()
     except:
         log.exception('exception')
         
@@ -422,7 +424,7 @@ class CallSession(object):
             )
             
             sfi_buffer = sfi.serialize()
-            return CommMessage(ctx_table.get_addr(calle_ctx), ServerForwardInvite, sfi_buffer)
+            yield CommMessage(ctx_table.get_addr(calle_ctx), ServerForwardInvite, sfi_buffer)
         except:
             log.exception('exception')
         
@@ -446,18 +448,23 @@ class CallSession(object):
                 if call_ctx:
                     caller_addr = ctx_table.get_addr(call_ctx.caller_ctx)                
                     if isinstance(msg, ClientInviteAck):                
-                        buf = self._forward_invite_ack(msg)
-                        ctr = ServerForwardRing
+                        return self._forward_invite_ack(msg, caller_addr)
                     elif isinstance(msg, ClientAnswer):
-                        # ClientAnswer is forwarded as is
-                        buf = msg.serialize()
-                        ctr = ClientAnswer                
+                        return self._forward_client_answer(msg, caller_addr)
+                    elif isinstance(msg, ClientHangupRequest):
+                        return self._handle_hangups(msg)
             else:
                 log.warning('_handle_signaling: call is out of context %s' % repr(call_ctx))
                 
-            return ctr and CommMessage(caller_addr, ctr, buf)
         except:
             log.exception('exception')
+
+    def _handle_hangups(self, request, calle_addr):   
+        buf = request.msg.serialize()
+        if request.msg_type == ClientHangupRequest:
+            yield CommMessage(calle_addr, ServerHangupRelay, buf)
+        elif request.msg_type == ClientHangupAck:
+            yield CommMessage(calle_addr, ServerHangupAckRelay, buf)
         
     def _handle_rtp(self, request):
         try:
@@ -467,7 +474,7 @@ class CallSession(object):
                 forward_to = (call_ctx.caller_ctx == request.client_ctx 
                     and call_ctx.calle_ctx) or request.client_ctx
                 request.addr = ctx_table.get_addr(forward_to)
-                return request
+                yield request
             else:    
                 log.warning('%s _handle_rtp: call is out of context %s' % (repr(self) ,repr(call_ctx)))
         except:
@@ -483,11 +490,11 @@ class CallSession(object):
             result.unpack_from(reason)
             sri.set_values(client_ctx = ctx, result = result.value)            
             addr = ctx_table.get_addr(request.client_ctx)
-            return CommMessage(addr, ServerRejectInvite, sri.serialize())
+            yield CommMessage(addr, ServerRejectInvite, sri.serialize())
         except:
             log.exception('exception')
         
-    def _forward_invite_ack(self, cia, call_type = CallTypes.ViaProxy):
+    def _forward_invite_ack(self, cia, caller_addr, call_type = CallTypes.ViaProxy):
         try:
             sfr = ServerForwardRing()
             sfr.set_values(
@@ -498,7 +505,14 @@ class CallSession(object):
                 client_public_ip = cia.client_public_ip.value,
                 client_public_port = cia.client_public_port.value)
             buf = sfr.serialize()
-            return buf
+            yield CommMessage(caller_addr, ServerForwardRing,buf)
+        except:
+            log.exception('exception')
+        
+    def _forward_client_answer(self, msg, caller_addr):
+        try:
+            buf = msg.serialize()
+            yield CommMessage(caller_addr, ClientAnswer,buf)
         except:
             log.exception('exception')
         
