@@ -41,10 +41,3 @@ Listeners = (
     ('udp', 50009),
     ('tcp', 50009),
 )
-
-Users = Storage(
-    {
-        'tzury': {'username': 'tzury', 'password': '0'*20, 'login_status': 0},
-        'tzury': {'username': 'udi', 'password': '0'*20, 'login_status': 0},
-    }
-)

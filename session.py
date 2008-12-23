@@ -220,7 +220,8 @@ def handle_outbound_queue():
         try:
             reply = outbound_messages.get(block=0)
             if reply and hasattr(reply, 'msg') and hasattr(reply, 'addr'):
-                log.debug('server reply or forward a message %s to %s' % (reply.msg_type, repr(reply.addr)))
+                log.debug('server re(p)l(a)y %s to %s <<[%s]>>' % (
+                    reply.msg_type, repr(reply.addr), repr(reply.body)))
                 try:
                     data = reply.msg.pack()
                     reactor.callFromThread(servers_pool.send_to,reply.addr, data)
@@ -239,13 +240,15 @@ def _filter(request):
         _out = None
         msg = request.msg
         msg_type = request.msg_type
-        ctx = hasattr(msg, 'client_ctx') and msg.client_ctx.value
+        ctx = getattr(msg, 'client_ctx', None) and msg.client_ctx.value
         
-        if not ctx and msg_type != LoginRequest or (
-            ctx and ctx not in ctx_table.clients_ctx()):
-            log.warning('filter is throwing away unknown msg_type/client_ctx: %s, %s, %s'  
-                %(repr(ctx), repr(msg_type), repr(msg)))
-            
+        if not ctx and msg_type != LoginRequest \
+            or (ctx and ctx not in ctx_table.clients_ctx()):
+                
+            log.warning(
+                'filter is throwing away unknown '
+                'msg_type/client_ctx: %s, %s, %s'
+                %(repr(ctx), repr(msg_type), repr(msg)))                
         else:
             switch = {
                 LoginRequest: login_handler,
@@ -272,8 +275,6 @@ def touch_client(ctx): #, time_stamp = time.time(), expire=None):
             expire = time_stamp + CLIENT_EXPIRE
             ctx_table[ctx].last_keep_alive = time_stamp
             ctx_table[ctx].expire = expire
-            #print 'last_keep_alive: %s, expire: %s' % (ctx_table[ctx].last_keep_alive, ctx_table[ctx].expire)
-            #print 'last_keep_alive: %s, expire: %s' % (ctx_table[ctx].last_keep_alive, ctx_table[ctx].expire)
             
     except:
         log.exception('exception')        
@@ -474,9 +475,14 @@ class CallSession(object):
     def _reject(self, reason, request):
         try:
             log.info('server reject invite CTX:%s, Reason: %s' % (repr(request.client_ctx), repr(reason)))
-            reject = ServerRejectInvite(client_ctx=request.client_ctx, reason=reason)
+            #reject = ServerRejectInvite(client_ctx=request.client_ctx, result=reason)
+            ctx = request.client_ctx
+            sri = ServerRejectInvite()
+            result = ShortField(0)
+            result.unpack_from(reason)
+            sri.set_values(client_ctx = ctx, result = result.value)            
             addr = ctx_table.get_addr(request.client_ctx)
-            return CommMessage(addr, ServerRejectInvite, reject.serialize())
+            return CommMessage(addr, ServerRejectInvite, sri.serialize())
         except:
             log.exception('exception')
         

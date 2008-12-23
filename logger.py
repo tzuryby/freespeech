@@ -34,13 +34,13 @@ class Logger:
         self.logger.debug(''.join(str(i) for i in args))
 
     def info(self, *args):
-        self.logger.debug(''.join(str(i) for i in args))
+        self.logger.info(''.join(str(i) for i in args))
 
     def exception(self, *args):
-        self.logger.debug(''.join(str(i) for i in args))
+        self.logger.exception(''.join(str(i) for i in args))
 
     def warning(self, *args):
-        self.logger.debug(''.join(str(i) for i in args))
+        self.logger.warning(''.join(str(i) for i in args))
 
 
 log = Logger()

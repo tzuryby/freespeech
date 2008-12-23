@@ -107,7 +107,7 @@ class CommMessage(object):
         self.call_ctx = hasattr(self.msg, 'call_ctx') and self.msg.call_ctx.value
         
     def __repr__(self):
-        return 'from %s <%s>, type %s, msg %s' % (self.addr, self.client_ctx, self.msg_type, self.msg.__repr__())
+        return 'from %s <%s>, type %s, msg %s' % (self.addr, self.client_ctx, self.msg_type, repr(self.msg))
         
 class Field(object):
     def __init__(self, start, format, name=None):
@@ -423,14 +423,18 @@ class ClientInvite(SignalingMessage):
         SignalingMessage.__init__(self, *args, **kwargs)
         
 class ServerRejectInvite(ShortResponse):
-    def __init__(self, *args, **kwargs):
-        BaseMessage.__init__(self, *args, **kwargs)
+    pass
+    ''''''
+    #def __init__(self, *args, **kwargs):
+    #    ShortResponse.__init__(self, *args, **kwargs)
         
-        if ('client_ctx' in kwargs or 'reason' in kwargs) and 'buf' not in kwargs:
-            self.set_values(client_ctx = kwargs['client_ctx'], reason = kwargs['reason'])
-        elif 'buf' not in kwargs:
-            log.warning('Incorrect parameters')
+        #if ('client_ctx' in kwargs or 'result' in kwargs):
+        #    self.set_values(client_ctx = kwargs['client_ctx'], reason = kwargs['result'])
+        #elif 'buf' not in kwargs:
+        #    log.warning('Neither values nor buffer supplied. can\'t build a reject invite')
             
+        #print 'kwargs', kwargs
+        
 class ServerForwardInvite(SignalingMessage):
     def __init__(self, *args, **kwargs):
         self.seq = [
