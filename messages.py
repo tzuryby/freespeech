@@ -44,7 +44,8 @@ __all__ = [
     'StringField', 
     'UUIDField', 
     'MessageTypes', 
-    'string_to_ctx']
+    'string_to_ctx',
+    ]
     
 import struct, uuid, sys, traceback
 from ctypes import create_string_buffer
