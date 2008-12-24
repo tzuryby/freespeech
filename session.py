@@ -107,6 +107,21 @@ class CtxTable(Storage):
             if call.ctx_id == call_ctx:
                 return call
                 
+    def get_other_addr(self, client_ctx, call_ctx):
+        call_data = self.find_call(call_ctx)
+        
+        if call_data:
+            a_ctx, b_ctx = call_data.calle_ctx, call_data.caller_ctx
+        
+            if a_ctx != client_ctx:
+                other_ctx = a_ctx
+            elif b_ctx != client_ctx:
+                other_ctx = b_ctx
+                
+            return self.get_addr(other_ctx)
+        else:
+            raise 'fatal error: Cannot find other party\'s context'
+        
     def get_addr(self, client_ctx):
         '''return the last ip address registered for this client'''
         return client_ctx in self and self[client_ctx].addr
@@ -187,6 +202,7 @@ def create_call_ctx(request):
     except:
         log.exception('exception')
     
+
 def remove_old_clients():
     try:
         while thread_loop_active:
@@ -450,41 +466,33 @@ class CallSession(object):
             ctr, msg, client_ctx, call_ctx = \
             None, request.msg, request.client_ctx, request.call_ctx
             
-            if call_ctx in ctx_table.calls_ctx():
-                calle_addr = request.addr
-                call_ctx_data = ctx_table.find_call(call_ctx)
-                if call_ctx_data:
-                    caller_addr = ctx_table.get_addr(call_ctx_data.caller_ctx)                
-                    if isinstance(msg, ClientInviteAck):                
-                        return self._forward_invite_ack(msg, caller_addr)
-                    elif isinstance(msg, ClientAnswer):
-                        return self._forward_client_answer(msg, caller_addr)
-                    elif isinstance(msg, (HangupRequest, HangupRequestAck)):
-                        return self._handle_hangup(request, client_ctx, call_ctx_data)
+            call_ctx_data = ctx_table.find_call(call_ctx)
+            if call_ctx_data:
+                other_addr = ctx_table.get_other_addr(client_ctx, call_ctx)
+                if isinstance(msg, ClientInviteAck):                
+                    return self._forward_invite_ack(msg, other_addr)
+                elif isinstance(msg, ClientAnswer):
+                    return self._forward_client_answer(msg, other_addr)
+                elif isinstance(msg, (HangupRequest, HangupRequestAck)):
+                    return self._handle_hangup(request, other_addr)
             else:
                 log.warning('_handle_signaling: call is out of context %s' % repr(call_ctx))
                 
         except:
             log.exception('exception')
 
-    def _handle_hangup(self, request, client_ctx, call_ctx_data):
-        forward_to = (call_ctx_data.caller_ctx == client_ctx 
-            and call_ctx_data.calle_ctx) or client_ctx
-        addr = ctx_table.get_addr(forward_to)
+    def _handle_hangup(self, request, addr):
         buf = request.msg.serialize()
-        
-        if request.msg_type in (HangupRequest, HangupRequestAck, ):
-            yield CommMessage(addr, request.msg_type, buf)
+        yield CommMessage(addr, request.msg_type, buf)
             
     def _handle_rtp(self, request):
         try:
             call_ctx = ctx_table.find_call(request.call_ctx)
             if call_ctx:
-                # get the other party client_ctx
-                forward_to = (call_ctx.caller_ctx == request.client_ctx 
-                    and call_ctx.calle_ctx) or request.client_ctx
-                request.addr = ctx_table.get_addr(forward_to)
-                yield request
+                other_addr = ctx_table.get_other_addr(request.client_ctx, request.call_ctx)
+                buf = request.msg.serialize()
+                #request.addr = ctx_table.get_addr(request.client_ctx)
+                yield CommMessage(other_addr, ClientRTP, buf)
             else:    
                 log.warning('%s _handle_rtp: call is out of context %s' % (repr(self) ,repr(call_ctx)))
         except:
@@ -504,7 +512,7 @@ class CallSession(object):
         except:
             log.exception('exception')
         
-    def _forward_invite_ack(self, cia, caller_addr, call_type = CallTypes.ViaProxy):
+    def _forward_invite_ack(self, cia, addr, call_type = CallTypes.ViaProxy):
         try:
             sfr = ServerForwardRing()
             sfr.set_values(
@@ -515,14 +523,14 @@ class CallSession(object):
                 client_public_ip = cia.client_public_ip.value,
                 client_public_port = cia.client_public_port.value)
             buf = sfr.serialize()
-            yield CommMessage(caller_addr, ServerForwardRing,buf)
+            yield CommMessage(addr, ServerForwardRing,buf)
         except:
             log.exception('exception')
         
-    def _forward_client_answer(self, msg, caller_addr):
+    def _forward_client_answer(self, msg, addr):
         try:
             buf = msg.serialize()
-            yield CommMessage(caller_addr, ClientAnswer,buf)
+            yield CommMessage(addr, ClientAnswer,buf)
         except:
             log.exception('exception')
         

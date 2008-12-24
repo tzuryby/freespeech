@@ -145,13 +145,15 @@ class SnoipClient(object):
         
     def request_hangup(self):
         request = HangupRequest()
-        request.set_values(client_ctx = self.client_ctx, call_ctx = self.call_ctx)
+        request.set_values(client_ctx = self.client_ctx, call_ctx = self.call_ctx)        
         self._send(request.pack())
-        
+        print 'requesting hangup'
+
     def ack_hangup(self):
         ack = HangupRequestAck()
         ack.set_values(client_ctx = self.client_ctx, call_ctx = self.call_ctx)
         self._send(ack.pack())
+        print 'acking hangup'
         
 def create_login_msg(username, password='0'*20):
     header = '\xab\xcd'

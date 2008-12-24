@@ -542,8 +542,8 @@ MessageTypes = Storage({
     
     '\x00\x20': ClientRTP,
 
-    '\x00\x41': HangupRequest,
-    '\x00\x42': HangupRequestAck,
+    '\x00\x40': HangupRequest,
+    '\x00\x41': HangupRequestAck,
     
     '\x00\xa0': ServerOverloaded
 })
