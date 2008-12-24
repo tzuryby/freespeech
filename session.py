@@ -3,7 +3,9 @@
 
 from __future__ import with_statement
 
-import time, Queue, struct, uuid, threading, sys, traceback
+import time, Queue, struct, uuid 
+import threading, sys, traceback
+
 import dblayer, messages, config
 
 from md5 import new as md5
@@ -80,7 +82,7 @@ class CtxTable(Storage):
             self[ctx_id] = ctx_data
             
     def remove_client(self, ctx_id):
-        '''todo: cehck if need to clean the the call record at the other party'''
+        '''todo: check if need to clean the the call record at the other party'''
         with rlock():
             del self[ctx_id]
         
@@ -141,16 +143,21 @@ def create_client_context(comm_msg, status=ClientStatus.Unknown):
         '''creates the client context for each new logged in client        
         returns a tuple(ctx_id, client_ctx_data)
         client_ctx_data.keys() =>
-            addr, status, expire, last_keep_alive, socket, proto, 
-            socket_id, ctx_id, call_ctx, client_name
+          addr, status, expire, last_keep_alive, ctx_id, call_ctx, client_name
         '''
         ctx_id = comm_msg.client_ctx
         addr = comm_msg.addr
         if servers_pool.known_address(addr):
             now = time.time()
-            ctx = Storage (addr=addr, status=status, expire=now + CLIENT_EXPIRE,
-                last_keep_alive=now, ctx_id = ctx_id, call_ctx = None, 
-                client_name = comm_msg.msg.username.value)
+            ctx = Storage (
+                addr=addr, 
+                status=status, 
+                expire=now + CLIENT_EXPIRE,
+                last_keep_alive=now, 
+                ctx_id = ctx_id, 
+                call_ctx = None, 
+                client_name = comm_msg.msg.username.value
+            )
             return (ctx_id, ctx)
         else:
             return None
@@ -221,7 +228,7 @@ def handle_outbound_queue():
         try:
             reply = outbound_messages.get(block=0)
             if reply and hasattr(reply, 'msg') and hasattr(reply, 'addr'):
-                log.debug('server re(p)l(a)y %s to %s [%s]' % (
+                log.debug('server sends %s to %s [%s]' % (
                     reply.msg_type, repr(reply.addr), repr(reply.body)))
                 try:
                     data = reply.msg.pack()
@@ -288,7 +295,8 @@ def keep_alive_handler(request):
         #reply with keep-alive-ack
         kaa = KeepAliveAck()
         
-        kaa.set_values(client_ctx=request.client_ctx,
+        kaa.set_values(
+            client_ctx=request.client_ctx,
             expire = expire,
             refresh_contact_list = 0
         )
@@ -314,7 +322,7 @@ def login_handler(request):
             
     def login_reply(ctx_id, ctx_data):
         try:
-            '''creates login reply and put it in the outbound queue'''
+            '''returns a login reply'''
             lr = LoginReply()
             ip, port = ctx_data.addr
             codecs = sorted(Codecs.values())
@@ -323,20 +331,20 @@ def login_handler(request):
                 num_of_codecs=len(codecs), codec_list=''.join((c for c in codecs)))
             buf = lr.serialize()
             log.debug('login reply')
-            return CommMessage(request.addr, LoginReply, buf)
+            yield CommMessage(request.addr, LoginReply, buf)
         except:
             log.exception('exception')
         
     def deny_login():
         try:
-            '''creates login-denied reply and put it in the outbound queue'''
+            '''returns login-denied reply'''
             ld = ShortResponse()
             ld.set_values(
                 client_ctx = ('\x00 '*16).split(),
                 result = struct.unpack('!h', Errors.LoginFailure))
             buf = ld.serialize()
             log.info('login error')
-            return CommMessage(request.addr, ShortResponse, buf)
+            yield CommMessage(request.addr, ShortResponse, buf)
         except:
             log.exception('exception')
         
@@ -347,9 +355,9 @@ def login_handler(request):
             #creates new client context and register it
             ctx_id, ctx_data = create_client_context(request, status=dbuser.login_status)    
             ctx_table.add_client((ctx_id, ctx_data))
-            yield login_reply(ctx_id, ctx_data)
+            return login_reply(ctx_id, ctx_data)
         else:
-            yield deny_login()
+            return deny_login()
     except:
         log.exception('exception')
         
@@ -440,32 +448,35 @@ class CallSession(object):
             
     def _handle_signaling(self, request):
         try:
-            ctr, msg, call_ctx = None, request.msg, request.call_ctx
+            ctr, msg, client_ctx, call_ctx = \
+            None, request.msg, request.client_ctx, request.call_ctx
             
             if call_ctx in ctx_table.calls_ctx():
                 calle_addr = request.addr
-                call_ctx = ctx_table.find_call(call_ctx)
-                if call_ctx:
-                    caller_addr = ctx_table.get_addr(call_ctx.caller_ctx)                
+                call_ctx_data = ctx_table.find_call(call_ctx)
+                if call_ctx_data:
+                    caller_addr = ctx_table.get_addr(call_ctx_data.caller_ctx)                
                     if isinstance(msg, ClientInviteAck):                
                         return self._forward_invite_ack(msg, caller_addr)
                     elif isinstance(msg, ClientAnswer):
                         return self._forward_client_answer(msg, caller_addr)
-                    elif isinstance(msg, ClientHangupRequest):
-                        return self._handle_hangups(msg)
+                    elif isinstance(msg, (HangupRequest, HangupRequestAck)):
+                        return self._handle_hangup(request, client_ctx, call_ctx_data)
             else:
                 log.warning('_handle_signaling: call is out of context %s' % repr(call_ctx))
                 
         except:
             log.exception('exception')
 
-    def _handle_hangups(self, request, calle_addr):   
+    def _handle_hangup(self, request, client_ctx, call_ctx_data):
+        forward_to = (call_ctx_data.caller_ctx == client_ctx 
+            and call_ctx_data.calle_ctx) or client_ctx
+        addr = ctx_table.get_addr(forward_to)
         buf = request.msg.serialize()
-        if request.msg_type == ClientHangupRequest:
-            yield CommMessage(calle_addr, ServerHangupRelay, buf)
-        elif request.msg_type == ClientHangupAck:
-            yield CommMessage(calle_addr, ServerHangupAckRelay, buf)
         
+        if request.msg_type in (HangupRequest, HangupRequestAck, ):
+            yield CommMessage(addr, request.msg_type, buf)
+            
     def _handle_rtp(self, request):
         try:
             call_ctx = ctx_table.find_call(request.call_ctx)

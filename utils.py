@@ -7,6 +7,7 @@ __license__ = 'GPLv3'
 __all__ = ['Storage',]
 
 
+# tweak by anand @ webpy
 class Storage(dict):
     def __new__(cls, *args, **kwargs):
         self = dict.__new__(cls, *args, **kwargs)

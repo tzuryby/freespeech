@@ -18,10 +18,8 @@ __all__ = [
     'ByteField', 
     'CharField', 
     'ClientAnswer', 
-    'ClientHangupRequest', 
-    'ServerHangupRelay', 
-    'ClientHangupAck',  
-    'ServerHangupAckRelay', 
+    'HangupRequest', 
+    'HangupRequestAck', 
     'ClientInvite', 
     'ClientInviteAck', 
     'ClientRTP', 
@@ -358,10 +356,7 @@ class BaseMessage(object):
             self._pack_values()
             return self.buf.raw
         except:
-            log.exception('exception')        
-        
-    def __repr__(self):
-        return self.type_code
+            log.exception('exception')
         
     def pack(self):
         try:
@@ -505,8 +500,8 @@ class ClientRTP(BaseMessage):
             ('rtp_bytes', StringField, lambda: '!%dc' % self.rtp_bytes_length.value)]
             
         BaseMessage.__init__(self, *args, **kwargs)
-    
-class ClientHangupRequest(SignalingMessage):
+        
+class HangupRequest(SignalingMessage):
     def __init__(self, *args, **kwargs):
         self.seq = [
             ('client_ctx', UUIDField),
@@ -514,15 +509,14 @@ class ClientHangupRequest(SignalingMessage):
             
         SignalingMessage.__init__(self, *args, **kwargs)
         
-class ServerHangupRelay(ClientHangupRequest):
-    pass
-
-class ClientHangupAck(ClientHangupRequest):
-    pass
-
-class ServerHangupAckRelay(ClientHangupRequest):
-    pass
-
+class HangupRequestAck(SignalingMessage):
+    def __init__(self, *args, **kwargs):
+        self.seq = [
+            ('client_ctx', UUIDField),
+            ('call_ctx', UUIDField)]
+            
+        SignalingMessage.__init__(self, *args, **kwargs)
+        
 class ServerOverloaded(BaseMessage):
     def __init__(self, *args, **kwargs):
         self.seq = [('alternate_ip', IPField)]
@@ -548,10 +542,8 @@ MessageTypes = Storage({
     
     '\x00\x20': ClientRTP,
 
-    '\x00\x40': ClientHangupRequest,
-    '\x00\x41': ServerHangupRelay,
-    '\x00\x42': ClientHangupAck,
-    '\x00\x43': ServerHangupAckRelay,
+    '\x00\x41': HangupRequest,
+    '\x00\x42': HangupRequestAck,
     
     '\x00\xa0': ServerOverloaded
 })
@@ -560,13 +552,5 @@ def keyof(_v):
     for k,v in MessageTypes.iteritems():
         if _v == v or isinstance(_v, v):
             return k
-            
-MessageTypes.keyof = keyof
-        
-if __name__ == '__main__':
-    call, client = string_to_ctx('foo'), string_to_ctx('bar')
-    ch = ClientHangupRequest()
-    ch.set_values(call_ctx = call, client_ctx=client)
 
-#print repr(ch.pack())
-    
+MessageTypes.keyof = keyof

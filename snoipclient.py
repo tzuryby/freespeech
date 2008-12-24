@@ -85,6 +85,8 @@ class SnoipClient(object):
                 print 'call was answered by other party...'
             elif isinstance(msg, ClientRTP):
                 self.rtp_received(msg)
+            elif isinstance(msg, (HangupRequest)):
+                self.ack_hangup()
                 
                 
     def login(self, username, password):
@@ -141,6 +143,16 @@ class SnoipClient(object):
             
         self._send(ka.pack())
         
+    def request_hangup(self):
+        request = HangupRequest()
+        request.set_values(client_ctx = self.client_ctx, call_ctx = self.call_ctx)
+        self._send(request.pack())
+        
+    def ack_hangup(self):
+        ack = HangupRequestAck()
+        ack.set_values(client_ctx = self.client_ctx, call_ctx = self.call_ctx)
+        self._send(ack.pack())
+        
 def create_login_msg(username, password='0'*20):
     header = '\xab\xcd'
     trailer = '\xdc\xba'
@@ -180,5 +192,5 @@ def client_invite_ack(invite):
         client_public_port = invite.client_public_port.value
     )
     
-    print 'will ack invite of call_ctx:', repr(invite.call_ctx.value)
+    print 'client ack invite of call_ctx:', repr(invite.call_ctx.value)
     return cia.pack()
