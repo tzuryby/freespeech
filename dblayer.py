@@ -7,14 +7,7 @@ from utils import Storage
 from logger import log
 
 __all__ = ['Config', 'Users']
-    
-def config():
-    table = Storage()
-    for row in db.select('select key, value, fn from config'):
-        table[row.key] = eval(row.fn % row.value)
-    return table
-    
-Config = config()
+
 
 def users():
     users = Storage()
@@ -25,8 +18,6 @@ def users():
 Users = users()
 
 if __name__ == '__main__':
-    for key in Config.keys():
-        print key, Config[key]
 
     for user in Users:
         print Users[user]

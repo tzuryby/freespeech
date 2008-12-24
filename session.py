@@ -318,7 +318,6 @@ def login_handler(request):
                 return None
         except:
             log.exception('exception')
-
             
     def login_reply(ctx_id, ctx_data):
         try:
