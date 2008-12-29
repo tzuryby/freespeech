@@ -63,10 +63,11 @@ class Packer(object):
 '''a pool of all the listeners (tcp+udp) and thier known clients'''
 class ServersPool(Storage):
     def send_to(self, (host, port), data):
-        for id, listener in self.iteritems():
-            if listener.server.connected_to((host, port)):
-                listener.server.send_to((host, port), data)
-                return
+        if (host, port) is not None:
+            for id, listener in self.iteritems():
+                if listener.server.connected_to((host, port)):
+                    listener.server.send_to((host, port), data)
+                    return
                 
     def known_address(self, (host, port)):
         '''returns true if found a server which is connected to the client at the specified address'''
@@ -135,7 +136,8 @@ class CtxTable(Storage):
                 
             return self.get_addr(other_ctx)
         else:
-            raise 'fatal error: Cannot find other party\'s context'
+            log.warning('fatal error: Cannot find other party\'s context, '
+                'client_ctx  <%s>, call_ctx <%s>' % (repr( client_ctx), repr(call_ctx)))
         
     def get_addr(self, client_ctx):
         '''return the last ip address registered for this client'''
@@ -489,10 +491,8 @@ class CallSession(object):
                 elif isinstance(msg, ClientAnswer):
                     return self._forward_client_answer(msg, other_addr)
                 elif isinstance(msg, (HangupRequest, HangupRequestAck)):
-                    print 'yyyy'
                     return self._handle_hangup(request, other_addr)
             elif isinstance(msg, (HangupRequest)):
-                print 'xxxx'
                 return self._handle_hangup(request, other_addr)
             else:
                 log.warning('_handle_signaling: call is out of context %s' % repr(call_ctx))
