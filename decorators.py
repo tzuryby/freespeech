@@ -18,5 +18,5 @@ if __name__ == '__main__':
     def bar(a,b,c):
         print 'Hello'
         
-    bar(1,2,3)
+    bar(1,2,3, hello='world')
     

@@ -8,9 +8,19 @@ from logger import log
 CLIENT_EXPIRE = 60
 
 
-Codecs = Storage(PCMA='\x01', PCMU='\x02', G723='\x03', ILBC='\x04', SPEEX='\x05', SNAP='\x07')
+Codecs = Storage(
+    PCMA='\x01', 
+    PCMU='\x02', 
+    G723='\x03', 
+    ILBC='\x04', 
+    SPEEX='\x05', 
+    SNAP='\x07',
+)
 
-CallTypes = Storage (ViaProxy=1, Direct=2)
+CallTypes = Storage (
+    ViaProxy=1, 
+    Direct=2,
+)
 
 Errors = Storage(
     #general

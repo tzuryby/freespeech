@@ -6,8 +6,9 @@ from db import db
 from utils import Storage
 from logger import log
 
-__all__ = ['Config', 'Users']
-
+__all__ = [
+    'Users',
+]
 
 def users():
     users = Storage()
@@ -18,6 +19,5 @@ def users():
 Users = users()
 
 if __name__ == '__main__':
-
     for user in Users:
         print Users[user]

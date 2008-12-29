@@ -10,6 +10,7 @@ import dblayer, messages, config
 
 from md5 import new as md5
 from messages import *
+from messagefields import *
 from utils import Storage
 from config import *
 from decorators import printargs
@@ -85,7 +86,17 @@ class CtxTable(Storage):
         '''todo: check if need to clean the the call record at the other party'''
         with rlock():
             del self[ctx_id]
-        
+            
+    def terminate_call(self, client_ctx):
+        call_ctx_data = self[client_ctx].call_ctx
+        if call_ctx_data:
+            log.debug('hanging up call <%s>' % repr(call_ctx_data.ctx_id))
+            caller, callee = call_ctx_data.caller_ctx, call_ctx_data.callee_ctx
+            self[caller].call_ctx = None
+            self[callee].call_ctx = None
+        else:
+            log.debug('client %s has no calls' % repr(client_ctx))
+            
     def clients_ctx(self):
         '''all active clients (the keys)'''
         return self.keys()
@@ -107,11 +118,15 @@ class CtxTable(Storage):
             if call.ctx_id == call_ctx:
                 return call
                 
-    def get_other_addr(self, client_ctx, call_ctx):
-        call_data = self.find_call(call_ctx)
-        
+    def get_other_addr(self, client_ctx, call_ctx='\x00'*16):
+        call_data = None
+        if call_ctx != '\x00'*16:
+            call_data = self.find_call(call_ctx)
+        else:
+            call_data = self[client_ctx].call_ctx
+            
         if call_data:
-            a_ctx, b_ctx = call_data.calle_ctx, call_data.caller_ctx
+            a_ctx, b_ctx = call_data.callee_ctx, call_data.caller_ctx
         
             if a_ctx != client_ctx:
                 other_ctx = a_ctx
@@ -184,14 +199,14 @@ def create_call_ctx(request):
         '''creates the call context for each valid invite
         returns a tuple(ctx_id, call_ctx_data)
         call_ctx_data.keys() =>
-            caller_ctx, calle_ctx, start_time, answer_time, end_time, codec, proto, ctx_id
+            caller_ctx, callee_ctx, start_time, answer_time, end_time, codec, proto, ctx_id
         '''
         caller_ctx = request.msg.client_ctx.value
-        calle_ctx = string_to_ctx(request.msg.calle_name.value)
-        ctx_id =  string_to_ctx(caller_ctx, calle_ctx)
+        callee_ctx = string_to_ctx(request.msg.calle_name.value)
+        ctx_id =  string_to_ctx(caller_ctx, callee_ctx)
         ctx = Storage(
             caller_ctx = caller_ctx,
-            calle_ctx = calle_ctx,
+            callee_ctx = callee_ctx,
             start_time = time.time(),
             answer_time = 0,
             end_time = 0,
@@ -399,14 +414,14 @@ class CallSession(object):
     def _handle_invite(self, request):
         try:
             caller_ctx = request.msg.client_ctx.value
-            calle_ctx = string_to_ctx(request.msg.calle_name.value)
+            callee_ctx = string_to_ctx(request.msg.calle_name.value)
             
             # calle is not logged in
-            if calle_ctx not in ctx_table:
+            if callee_ctx not in ctx_table:
                 return self._reject(config.Errors.CalleeNotFound, request)
                 
             # calle is in another call session
-            elif ctx_table[calle_ctx].call_ctx:
+            elif ctx_table[callee_ctx].call_ctx:
                 return self._reject(config.Errors.CalleeUnavailable, request)
                 
             #todo: add here `away-status` case handler
@@ -428,14 +443,14 @@ class CallSession(object):
     def _forward_invite(self, call_ctx, matched_codecs):
         try:
             caller_ctx = call_ctx.caller_ctx
-            calle_ctx = call_ctx.calle_ctx
+            callee_ctx = call_ctx.callee_ctx
             caller_name = ctx_table[caller_ctx].client_name        
             caller_ip, caller_port = ctx_table.get_addr(caller_ctx)
             codec_list = ''.join(matched_codecs)
             
             sfi = ServerForwardInvite()
             sfi.set_values(
-                client_ctx = calle_ctx,
+                client_ctx = callee_ctx,
                 call_ctx = call_ctx.ctx_id,
                 call_type = config.CallTypes.ViaProxy,
                 client_name_length = len(caller_name),
@@ -447,7 +462,7 @@ class CallSession(object):
             )
             
             sfi_buffer = sfi.serialize()
-            yield CommMessage(ctx_table.get_addr(calle_ctx), ServerForwardInvite, sfi_buffer)
+            yield CommMessage(ctx_table.get_addr(callee_ctx), ServerForwardInvite, sfi_buffer)
         except:
             log.exception('exception')
         
@@ -466,15 +481,19 @@ class CallSession(object):
             ctr, msg, client_ctx, call_ctx = \
             None, request.msg, request.client_ctx, request.call_ctx
             
+            other_addr = ctx_table.get_other_addr(client_ctx, call_ctx)
             call_ctx_data = ctx_table.find_call(call_ctx)
             if call_ctx_data:
-                other_addr = ctx_table.get_other_addr(client_ctx, call_ctx)
                 if isinstance(msg, ClientInviteAck):                
                     return self._forward_invite_ack(msg, other_addr)
                 elif isinstance(msg, ClientAnswer):
                     return self._forward_client_answer(msg, other_addr)
                 elif isinstance(msg, (HangupRequest, HangupRequestAck)):
+                    print 'yyyy'
                     return self._handle_hangup(request, other_addr)
+            elif isinstance(msg, (HangupRequest)):
+                print 'xxxx'
+                return self._handle_hangup(request, other_addr)
             else:
                 log.warning('_handle_signaling: call is out of context %s' % repr(call_ctx))
                 
@@ -483,7 +502,11 @@ class CallSession(object):
 
     def _handle_hangup(self, request, addr):
         buf = request.msg.serialize()
+        
         yield CommMessage(addr, request.msg_type, buf)
+        
+        if isinstance(request.msg, HangupRequestAck):
+            ctx_table.terminate_call(request.client_ctx)
             
     def _handle_rtp(self, request):
         try:
@@ -491,7 +514,6 @@ class CallSession(object):
             if call_ctx:
                 other_addr = ctx_table.get_other_addr(request.client_ctx, request.call_ctx)
                 buf = request.msg.serialize()
-                #request.addr = ctx_table.get_addr(request.client_ctx)
                 yield CommMessage(other_addr, ClientRTP, buf)
             else:    
                 log.warning('%s _handle_rtp: call is out of context %s' % (repr(self) ,repr(call_ctx)))
@@ -501,7 +523,6 @@ class CallSession(object):
     def _reject(self, reason, request):
         try:
             log.info('server reject invite CTX:%s, Reason: %s' % (repr(request.client_ctx), repr(reason)))
-            #reject = ServerRejectInvite(client_ctx=request.client_ctx, result=reason)
             ctx = request.client_ctx
             sri = ServerRejectInvite()
             result = ShortField(0)

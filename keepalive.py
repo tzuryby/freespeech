@@ -7,8 +7,9 @@ import time
 from logger import log
 
 sc = SnoipClient(('localhost', 50009))
-sc.login('udi', '0'*20)
+sc.login('123', 'a123' + '-'*16)
 
 while True:
     time.sleep(10)
     sc.send_keep_alive()
+    

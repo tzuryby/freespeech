@@ -1,4 +1,5 @@
-import logging as lg
+import logging
+from logging import handlers
 
 __all__ = ['log']
 
@@ -9,19 +10,19 @@ class Logger:
     
     def __init__(self):
                 
-        self.file_frmt = lg.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-        self.stream_frmt = lg.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+        self.file_frmt = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+        self.stream_frmt = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
         
-        self.logger = lg.getLogger('snoip.freespeech')
-        self.logger.setLevel(lg.DEBUG)
+        self.logger = logging.getLogger('snoip.freespeech')
+        self.logger.setLevel(logging.DEBUG)
         
         #   file handler
-        self.fh = lg.FileHandler('snoip.freespeech.log')
-        self.fh.setLevel(lg.DEBUG)
+        self.fh = logging.FileHandler('snoip.freespeech.log')
+        self.fh.setLevel(logging.DEBUG)
         
         #   stream handler
-        self.ch = lg.StreamHandler()
-        self.ch.setLevel(lg.DEBUG)
+        self.ch = logging.StreamHandler()
+        self.ch.setLevel(logging.DEBUG)
         
         self.ch.setFormatter(self.stream_frmt)
         self.fh.setFormatter(self.file_frmt)

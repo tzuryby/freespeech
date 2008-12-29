@@ -42,6 +42,8 @@ class DB(object):
         if where:
             sql += " WHERE %s" % where
         self.execute(sql)
+        if where == '1=0':
+            log.warnning('db delete - no deletion <%s>' % where)
         
     def select(self, query):
         try:
@@ -54,7 +56,7 @@ class DB(object):
                 row = cur.fetchone()
             self.close()
         except:
-            print 'db select error'
+            log.exception('db select error <%s>' % query)
         finally:
             self.close()
             
@@ -64,10 +66,13 @@ class DB(object):
         return '"%s"' % v
         
     def execute(self, sql):
-        self.connect()
-        self.conn.execute(sql)
-        self.conn.commit()
-        self.close()
+        try:
+            self.connect()
+            self.conn.execute(sql)
+            self.conn.commit()
+            self.close()
+        except:
+            log.exception('db execute sql error <%s>' % sql)
         
     def update(self, table, **kwargs):        
         _update = 'UPDATE %s ' % table

@@ -15,20 +15,17 @@ def run_all():
         session.handle_outbound_queue, 
         session.remove_old_clients, 
     )
-        
+    
     for thread in threads:
         Thread(target = thread).start()
         
-        
 def stop_all(*args):
-    
     #stop the reactor
     log.info( 'termination process started... terminating reactor\'s mainloop')
     reactor.stop()
     #stop flag for threads at session module (started at start_all() function above)
     session.thread_loop_active = False
     
-
 if __name__ == '__main__':
     try:
         signal.signal(signal.SIGINT, stop_all)

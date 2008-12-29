@@ -33,7 +33,7 @@ class TCPServer(Protocol):
         log.info('connection Lost')
         self.factory.echoers.remove(self)
         
-
+    
 class TCPServerFactory(ServerFactory):
     protocol = TCPServer
     echoers = []
@@ -68,6 +68,10 @@ class UDPServer(DatagramProtocol):
         
         self.dataReceivedHandler((host, port), data)
     
+    def send_all(self, data):
+        for (host, port) in self.echoers:
+            self.send_to((host, port), data)
+            
     def send_to(self, (host, port), data):
         if self.connected_to((host, port)):
             self.transport.write(data, (host, port))
@@ -75,7 +79,14 @@ class UDPServer(DatagramProtocol):
     def connected_to(self, (host, port)):
         return (host, port) in self.echoers
         
-        
+
+class BroadcastServer(TCPServer):
+    def dataReceived(self, data):
+        self.factory.send_all(data)
+    
+class BroadcastServerFactory(TCPServerFactory):
+    protocol = BroadcastServer
+    
 start_tcp = TCPServerFactory
 start_udp = UDPServer
 
@@ -93,6 +104,9 @@ def serve(listeners):
         reactor_listen[proto](port, starter)
         session.servers_pool.add(proto, starter)
         log.info( 'serving %s on port %s' % (proto, port))
+        
+    # add tcp broadcast server
+    #reactor.listenTCP(9020, BroadcastServerFactory())
         
     reactor.run(installSignalHandlers=0)
     
