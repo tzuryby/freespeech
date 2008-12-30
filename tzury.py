@@ -6,7 +6,7 @@ from snoipclient import SnoipClient
 import time
 
 # init a client at snoip port
-sc = SnoipClient(('80.74.97.189', 50009))
+sc = SnoipClient(('0.0.0.0', 50009))
 
 #login 
 sc.login('121', 'a121----------------')

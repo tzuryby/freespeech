@@ -5,7 +5,7 @@ from __future__ import with_statement
 from snoipclient import SnoipClient
 import time
 
-sc = SnoipClient(('80.74.97.189', 50009))
+sc = SnoipClient(('0.0.0.0', 50009))
 time.sleep(1)
 sc.login('120', 'a120----------------')
 

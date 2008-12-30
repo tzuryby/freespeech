@@ -32,8 +32,9 @@ class Packer(object):
     def pack(self, client, msg):
         try:
             self._recv(client, msg)
+            
+            # check if msg is ready to be packed
             if self.parser.eof(msg):
-                # get the whole message
                 msg = self.clients[client]
                 if self.parser.valid(msg):
                     msg_type, buf = self.parser.body(self.clients[client])
@@ -41,11 +42,15 @@ class Packer(object):
                     cm = CommMessage(client, ctr, buf)
                     self.queue.put(cm)                    
                 else:
-                    log.warning('Packer.pack() >>> not a valid message %s' % msg)
+                    log.warning('unpackable (invalid) message %s' % repr(msg))
                 
+                # clean the packing pipeline for this client
                 del self.clients[client]
             else:
-                log.warning('Packer.pack() >>> eof not found, waiting for more bytes')
+                if client not in self.clients:
+                    log.info('msg ignored')
+                else:
+                    log.info('no eof. waiting for more bytes')
         except:
             log.exception('exception')
             
@@ -53,9 +58,15 @@ class Packer(object):
     def _recv(self, client, msg):
         try:
             # new client or new message
-            if (client not in self.clients and self.parser.bof(msg)):
-                self.clients[client] = msg
+            if client not in self.clients:
+                # check if message starts fine
+                if self.parser.bof(msg):
+                    # save the incoming msg
+                    self.clients[client] = msg
+                else:
+                    log.info('unknown message from an unknown client (ignored)')
             else:
+                # concatenate the incoming message to previous packets
                 self.clients[client] = self.clients[client] + msg
         except:
             log.exception('exception')
@@ -64,39 +75,41 @@ class Packer(object):
 class ServersPool(Storage):
     def send_to(self, (host, port), data):
         if (host, port) is not None:
-            for id, listener in self.iteritems():
-                if listener.server.connected_to((host, port)):
-                    listener.server.send_to((host, port), data)
-                    return
+            listener = self.known_address((host, port))
+            if listener:
+                listener.server.send_to((host, port), data)
+                return
                 
     def known_address(self, (host, port)):
         '''returns true if found a server which is connected to the client at the specified address'''
         for id, listener in self.iteritems():
             if listener.server.connected_to((host, port)):
-                return True
+                return listener
                 
+        return None
+        
     def add(self, proto, server):
         self[uuid.uuid4().hex] = Storage(proto = proto, server=server)
         
 class CtxTable(Storage):
-    def add_client(self, (ctx_id, ctx_data)):
+    def add_client(self, (client_ctx, data)):
         with rlock():
-            self[ctx_id] = ctx_data
+            self[client_ctx] =data
             
-    def remove_client(self, ctx_id):
+    def remove_client(self, client_ctx):
         '''todo: check if need to clean the the call record at the other party'''
         with rlock():
-            del self[ctx_id]
+            if self.get(client_ctx):
+                del self[client_ctx]
             
     def terminate_call(self, client_ctx):
-        call_ctx_data = self[client_ctx].call_ctx
-        if call_ctx_data:
-            log.debug('hanging up call <%s>' % repr(call_ctx_data.ctx_id))
-            caller, callee = call_ctx_data.caller_ctx, call_ctx_data.callee_ctx
-            self[caller].call_ctx = None
-            self[callee].call_ctx = None
+        call = self.client_call(client_ctx)
+        if call:
+            log.debug('hanging up call <%s>' % repr(call.ctx_id))
+            caller_ctx, callee_ctx = call.caller_ctx, call.callee_ctx
+            self[caller_ctx].current_call = self[callee_ctx].current_call = None
         else:
-            log.debug('client %s has no calls' % repr(client_ctx))
+            log.debug('no calls for client <%s>' % repr(client_ctx))
             
     def clients_ctx(self):
         '''all active clients (the keys)'''
@@ -108,7 +121,9 @@ class CtxTable(Storage):
             
     def calls(self):
         '''all active calls'''
-        return (self[ctx].call_ctx for ctx in self if self[ctx].call_ctx)
+        return (self[client_ctx].current_call 
+                for client_ctx in self.clients_ctx() 
+                if self[client_ctx].current_call)
             
     def calls_ctx(self):
         '''all active calls contexts ids'''
@@ -118,26 +133,24 @@ class CtxTable(Storage):
         for call in self.calls():
             if call.ctx_id == call_ctx:
                 return call
+        return None
                 
-    def get_other_addr(self, client_ctx, call_ctx='\x00'*16):
-        call_data = None
-        if call_ctx != '\x00'*16:
-            call_data = self.find_call(call_ctx)
+    def get_other_addr(self, client_ctx, call_ctx=config.EMPTY_CTX):
+        call = None
+        if call_ctx != config.EMPTY_CTX:
+            call = self.find_call(call_ctx)
         else:
-            call_data = self[client_ctx].call_ctx
+            call = self[client_ctx].current_call
             
-        if call_data:
-            a_ctx, b_ctx = call_data.callee_ctx, call_data.caller_ctx
-        
-            if a_ctx != client_ctx:
-                other_ctx = a_ctx
-            elif b_ctx != client_ctx:
-                other_ctx = b_ctx
-                
-            return self.get_addr(other_ctx)
+        if call:
+            return self.get_addr(
+                (call.callee_ctx != client_ctx and call.callee_ctx)
+                or call.caller_ctx)
         else:
-            log.warning('fatal error: Cannot find other party\'s context, '
-                'client_ctx  <%s>, call_ctx <%s>' % (repr( client_ctx), repr(call_ctx)))
+            log.warning('Cannot find other party\'s context, '
+                'client_ctx  <%s>, call_ctx <%s>. '
+                'Might be removed at previous hangup request' 
+                 % (repr( client_ctx), repr(call_ctx)))
         
     def get_addr(self, client_ctx):
         '''return the last ip address registered for this client'''
@@ -149,19 +162,26 @@ class CtxTable(Storage):
             self[client_ctx].addr = (host, port)
             
     def client_call(self, client_ctx):
-        return client_ctx in self and self[client_ctx].call_ctx
+        call_ctx = None
+        if client_ctx in self.clients_ctx():
+            call = self[client_ctx].current_call
+            if not call:
+                for call in self.calls():
+                    if call.caller_ctx == client_ctx or call.callee_ctx == client_ctx:
+                        return call
+            return call
             
     def keep_alives(self):
         '''generator of tuples (client_ctx_id, last_keep_alive)'''
         return ((ctx, self[ctx].last_keep_alive) for ctx in self)
             
-    def names(self):
+    def clients_names(self):
         '''all connected clients user names'''
-        return (self[ctx].client_name for ctx in self)
+        return (client.client_name for client in self.clients())
             
     def clients_status(self):
         '''all connected clients user names and their status (name, status)'''
-        return ((self[ctx].client_name, self[ctx].status) for ctx in self)
+        return ((self[ctx].client_name, self[ctx].status) for ctx in self.clients_ctx())
             
 def recv_msg(caller, (host, port), msg):
     try:
@@ -187,7 +207,7 @@ def create_client_context(comm_msg, status=ClientStatus.Unknown):
                 expire=now + CLIENT_EXPIRE,
                 last_keep_alive=now, 
                 ctx_id = ctx_id, 
-                call_ctx = None, 
+                current_call = None, 
                 client_name = comm_msg.msg.username.value
             )
             return (ctx_id, ctx)
@@ -423,7 +443,7 @@ class CallSession(object):
                 return self._reject(config.Errors.CalleeNotFound, request)
                 
             # calle is in another call session
-            elif ctx_table[callee_ctx].call_ctx:
+            elif ctx_table[callee_ctx].current_call:
                 return self._reject(config.Errors.CalleeUnavailable, request)
                 
             #todo: add here `away-status` case handler
@@ -436,7 +456,7 @@ class CallSession(object):
                 # create call ctx
                 call_ctx_id, call_ctx = create_call_ctx(request)            
                 # mark the caller as in another call session
-                ctx_table[caller_ctx].call_ctx = call_ctx
+                ctx_table[caller_ctx].current_call = call_ctx
                 # send ServerForwardInvite to the calle
                 return self._forward_invite(call_ctx, matched_codecs)
         except:
@@ -480,9 +500,9 @@ class CallSession(object):
             
     def _handle_signaling(self, request):
         try:
-            ctr, msg, client_ctx, call_ctx = \
-            None, request.msg, request.client_ctx, request.call_ctx
-            
+            msg, client_ctx, call_ctx = (
+                request.msg, request.client_ctx, request.call_ctx)
+            ctr = None
             other_addr = ctx_table.get_other_addr(client_ctx, call_ctx)
             call_ctx_data = ctx_table.find_call(call_ctx)
             if call_ctx_data:
@@ -550,6 +570,7 @@ class CallSession(object):
         
     def _forward_client_answer(self, msg, addr):
         try:
+            # ?todo?: should copy call_ctx_data from the other party?
             buf = msg.serialize()
             yield CommMessage(addr, ClientAnswer,buf)
         except:
