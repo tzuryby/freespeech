@@ -13,4 +13,4 @@ class Storage(dict):
         self = dict.__new__(cls, *args, **kwargs)
         self.__dict__ = self
         return self
-       
+        

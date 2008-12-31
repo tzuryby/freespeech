@@ -1,6 +1,10 @@
 #!/usr/bin/env python
 # -*- coding: UTF-8 -*-
 
+__author__ = 'Tzury Bar Yochay'
+__version__ = '0.1'
+__license__ = 'GPLv3'
+
 '''
 **************************************
 messages.py (part of freespeech.py)
@@ -39,7 +43,7 @@ __all__ = [
     
 import struct
 from ctypes import create_string_buffer
-from md5 import new as md5
+from hashlib import md5
 from utils import Storage
 from logger import log
 from messagefields import *
@@ -47,9 +51,6 @@ from messagefields import *
 def string_to_ctx(*args):
     v = ''.join(args)
     return md5(v).digest()
-
-MessageFactory = Storage(
-    create= lambda msg_type, buf: msg_type in MessageTypes and MessageTypes[msg_type](buf=buf) or None )
 
 class Parser(object):
     def __init__(self):
@@ -73,10 +74,10 @@ class Parser(object):
             return -1
         
     def valid(self, msg):
-        return self.bof(msg) \
-                and self.eof(msg) \
-                and self.length(msg) == len(self._body(msg)) \
-                and self.parse_type(msg)
+        return (self.bof(msg) 
+                and self.eof(msg) 
+                and self.length(msg) == len(self._body(msg)) 
+                and self.parse_type(msg))
         
     def _body(self, msg):
         buf = create_string_buffer(self.length(msg))
@@ -84,6 +85,7 @@ class Parser(object):
         return buf
         
     def body(self, msg):
+        '''returns a tuple (msg_type, msg_buffer)'''
         if self.valid(msg):
             return (self.parse_type(msg), self._body(msg))
         else:
@@ -101,9 +103,11 @@ class MessageFramer(object):
 message_framer = MessageFramer()
 
 class CommMessage(object):
-    '''Wrapping message with additional data.
-    Encapsulates the address, the type (ctr) and the context for the message
-    '''
+    '''Wrapps message with additional data.
+    Encapsulates the address, the type of the message(Class) 
+    and the context fields for the message (client, call)'''
+    addr = msg_type = body = msg_type = client_ctx = None
+
     def __init__(self, addr, msg_type, body):
         self.addr = addr
         self.msg_type = msg_type
@@ -123,7 +127,8 @@ class CommMessage(object):
         self.call_ctx = getattr(self.msg, 'call_ctx', None) and self.msg.call_ctx.value
         
     def __repr__(self):
-        return 'from %s <%s>, type %s, msg %s' % (self.addr, self.client_ctx, self.msg_type, repr(self.msg))
+        return 'from %s <%s>, type %s, msg %s' % (
+            self.addr, self.client_ctx, self.msg_type, repr(self.msg))
                     
 class BaseMessage(object):
     seq = [] # the sequence of fields stored in the buffer

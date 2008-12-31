@@ -1,7 +1,12 @@
 #!/usr/bin/env python
 # -*- coding: UTF-8 -*-
 
-import threading, signal, exceptions
+__author__ = 'Tzury Bar Yochay'
+__version__ = '0.1'
+__license__ = 'GPLv3'
+
+
+import signal, exceptions
 from threading import Thread
 from twisted.internet import reactor
 from serverfactory import serve
@@ -10,20 +15,20 @@ import config
 import session
 
 def run_all():
-    threads = (
+    functions = (
         session.handle_inbound_queue, 
         session.handle_outbound_queue, 
         session.remove_old_clients, 
     )
     
-    for thread in threads:
-        Thread(target = thread).start()
+    for fn in functions:
+        Thread(target=fn).start()
         
 def stop_all(*args):
     #stop the reactor
     log.info( 'termination process started... terminating reactor\'s mainloop')
     reactor.stop()
-    #stop flag for threads at session module (started at start_all() function above)
+    #stop flag for threads at session module (started at run_all() function above)
     session.thread_loop_active = False
     
 if __name__ == '__main__':

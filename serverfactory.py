@@ -7,6 +7,7 @@ __license__ = 'GPLv3'
 
 
 import sys, threading, time
+import logging, cPickle
 from threading import Thread
 
 from twisted.internet.protocol import Protocol, DatagramProtocol, ServerFactory
@@ -15,6 +16,7 @@ from twisted.internet import reactor
 import session
 from utils import Storage
 from logger import log
+
         
 class TCPServer(Protocol):
     dataReceivedHandler = session.recv_msg
@@ -29,7 +31,6 @@ class TCPServer(Protocol):
         
     def connectionLost(self, reason):
         #todo: -> remove this client form the session_ctx_table
-        
         log.info('connection Lost')
         self.factory.echoers.remove(self)
         
@@ -83,7 +84,14 @@ class UDPServer(DatagramProtocol):
 class BroadcastServer(TCPServer):
     def dataReceived(self, data):
         self.factory.send_all(data)
-    
+
+class BroadcastLoggingServer(BroadcastServer):
+    def dataReceived(self, data):
+        pass
+        #data = logging.makeLogRecord(cPickle.loads(data))
+        #self.factory.send_all(data)
+        #BroadcastServer.dataReceived(data)
+        
 class BroadcastServerFactory(TCPServerFactory):
     protocol = BroadcastServer
     

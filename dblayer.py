@@ -1,6 +1,11 @@
 #!/usr/bin/env python
 # -*- coding: UTF-8 -*-
 
+__author__ = 'Tzury Bar Yochay'
+__version__ = '0.1'
+__license__ = 'GPLv3'
+
+
 import re
 from db import db
 from utils import Storage

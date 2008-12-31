@@ -3,12 +3,16 @@
 
 from __future__ import with_statement
 
+__author__ = 'Tzury Bar Yochay'
+__version__ = '0.1'
+__license__ = 'GPLv3'
+
 import time, Queue, struct, uuid 
 import threading, sys, traceback
 
 import dblayer, messages, config
 
-from md5 import new as md5
+from hashlib import md5
 from messages import *
 from messagefields import *
 from utils import Storage
