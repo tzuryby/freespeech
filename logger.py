@@ -7,6 +7,7 @@ __license__ = 'GPLv3'
 
 import logging
 from logging import handlers
+from theme import default_theme as theme
 
 __all__ = ['log']
 
@@ -28,7 +29,7 @@ class Logger:
         
         self.file_frmt = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
         self.stream_frmt = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-        self.socket_frmt = logging.Formatter('%(message)s')
+        #self.socket_frmt = logging.Formatter('%(message)s')
         
         self.logger = logging.getLogger('snoip.freespeech')
         self.logger.setLevel(logging.DEBUG)
@@ -40,26 +41,26 @@ class Logger:
         self.ch = logging.StreamHandler()
         
         # tcp socket handler
-        self.sh = logging.handlers.SocketHandler('localhost', logging.handlers.DEFAULT_TCP_LOGGING_PORT)
+        #self.sh = logging.handlers.SocketHandler('localhost', logging.handlers.DEFAULT_TCP_LOGGING_PORT)
         
         self.ch.setFormatter(self.stream_frmt)
         self.fh.setFormatter(self.file_frmt)
-        self.sh.setFormatter(self.socket_frmt)
+        #self.sh.setFormatter(self.socket_frmt)
         
         self.logger.addHandler(self.ch)
         self.logger.addHandler(self.fh)
-        self.logger.addHandler(self.sh)
+        #self.logger.addHandler(self.sh)
         
     def debug(self, *args):
-        self.logger.debug(''.join(str(i) for i in args))
+        self.logger.debug(theme.style_field_name + ''.join(str(i) for i in args) + theme.style_normal)
 
     def info(self, *args):
-        self.logger.info(''.join(str(i) for i in args))
+        self.logger.info(theme.style_yellow + ''.join(str(i) for i in args) + theme.style_normal)
 
     def exception(self, *args):
-        self.logger.exception(''.join(str(i) for i in args))
+        self.logger.exception(theme.style_fail + ''.join(str(i) for i in args) + theme.style_normal)
 
     def warning(self, *args):
-        self.logger.warning(''.join(str(i) for i in args))
+        self.logger.warning(theme.style_watchlist_value + ''.join(str(i) for i in args) + theme.style_normal)
 
 log = Logger()

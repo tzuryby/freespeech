@@ -7,7 +7,7 @@ __license__ = 'GPLv3'
 
 
 import sys, threading, time
-import logging, cPickle
+import logging, cPickle, exceptions
 from threading import Thread
 
 from twisted.internet.protocol import Protocol, DatagramProtocol, ServerFactory
@@ -87,14 +87,14 @@ class BroadcastServer(TCPServer):
 
 class BroadcastLoggingServer(BroadcastServer):
     def dataReceived(self, data):
-        pass
-        #data = logging.makeLogRecord(cPickle.loads(data))
-        #self.factory.send_all(data)
-        #BroadcastServer.dataReceived(data)
-        
-class BroadcastServerFactory(TCPServerFactory):
-    protocol = BroadcastServer
-    
+        try:
+            data = cPickle.loads(data)
+        except exceptions.EOFError:
+            pass
+        data = logging.makeLogRecord(data)
+        BroadcastServer.dataReceived(data)
+
+
 start_tcp = TCPServerFactory
 start_udp = UDPServer
 
@@ -113,8 +113,9 @@ def serve(listeners):
         session.servers_pool.add(proto, starter)
         log.info( 'serving %s on port %s' % (proto, port))
         
-    # add tcp broadcast server
-    #reactor.listenTCP(9020, BroadcastServerFactory())
+    broadcast = TCPServerFactory()
+    broadcast.protocol = BroadcastLoggingServer
+    reactor.listenTCP(9020,broadcast)
         
     reactor.run(installSignalHandlers=0)
     
