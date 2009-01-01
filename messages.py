@@ -38,19 +38,14 @@ __all__ = [
     'ServerRejectInvite', 
     'ShortResponse', 
     'MessageTypes', 
-    'string_to_ctx',
 ]
     
 import struct
 from ctypes import create_string_buffer
-from hashlib import md5
 from utils import Storage
 from logger import log
 from messagefields import *
 
-def string_to_ctx(*args):
-    v = ''.join(args)
-    return md5(v).digest()
 
 class Parser(object):
     def __init__(self):
@@ -120,11 +115,9 @@ class CommMessage(object):
             self.client_ctx = self.msg.client_ctx.value
             
         elif isinstance(self.msg, (LoginRequest,)):
-            client_ctx = string_to_ctx(self.msg.username.value)
+            client_ctx = hash(self.msg.username.value)
             log.info('a new client_ctx', 'username: %s ctx: %s' % (self.msg.username.value ,repr(client_ctx)))
             self.client_ctx = client_ctx
-            
-        self.call_ctx = getattr(self.msg, 'call_ctx', None) and self.msg.call_ctx.value
         
     def __repr__(self):
         return 'from %s <%s>, type %s, msg %s' % (
@@ -251,7 +244,7 @@ class BaseMessage(object):
 class ShortResponse(BaseMessage):
     def __init__(self, *args, **kwargs):
         self.seq = [
-            ('client_ctx', UUIDField),
+            ('client_ctx', IntField),
             ('result', ShortField)]
             
         BaseMessage.__init__(self, *args, **kwargs)
@@ -270,7 +263,7 @@ class LoginRequest(BaseMessage):
 class LoginReply(BaseMessage):
     def __init__(self, *args, **kwargs):
         self.seq = [
-            ('client_ctx', UUIDField),
+            ('client_ctx', IntField),
             ('client_public_ip', IPField),
             ('client_public_port', IntField),
             ('ctx_expire', IntField),
@@ -285,14 +278,14 @@ class AlternateServerMessage(BaseMessage):
     
 class Logout(BaseMessage):
     def __init__(self, *args, **kwargs):
-        self.seq = [('client_ctx', UUIDField)]
+        self.seq = [('client_ctx', IntField)]
         BaseMessage.__init__(self, *args, **kwargs)
 
     
 class KeepAlive(BaseMessage):
     def __init__(self, *args, **kwargs):
         self.seq = [
-            ('client_ctx', UUIDField),
+            ('client_ctx', IntField),
             ('client_public_ip', IPField),
             ('client_public_port', IntField)]
         
@@ -301,7 +294,7 @@ class KeepAlive(BaseMessage):
 class KeepAliveAck(BaseMessage):
     def __init__(self, *args, **kwargs):
         self.seq = [
-            ('client_ctx', UUIDField),
+            ('client_ctx', IntField),
             ('expire', IntField),
             ('refresh_contact_list', ByteField)]
         
@@ -314,7 +307,7 @@ class SignalingMessage(BaseMessage):
 class ClientInvite(SignalingMessage):
     def __init__(self, *args, **kwargs):
         self.seq = [
-            ('client_ctx', UUIDField),
+            ('client_ctx', IntField),
             ('calle_name_length', ByteField),
             ('calle_name', StringField, lambda: '!%dc' % self.calle_name_length.value),
             ('num_of_codecs', ByteField),
@@ -329,8 +322,7 @@ class ServerRejectInvite(ShortResponse):
 class ServerForwardInvite(SignalingMessage):
     def __init__(self, *args, **kwargs):
         self.seq = [
-            ('client_ctx', UUIDField),
-            ('call_ctx', UUIDField),
+            ('client_ctx', IntField),
             ('call_type', ByteField),
             ('client_name_length', ByteField),
             ('client_name', StringField, lambda: '!%dc' % self.client_name_length.value),
@@ -344,8 +336,7 @@ class ServerForwardInvite(SignalingMessage):
 class ClientInviteAck(SignalingMessage):
     def __init__(self, *args, **kwargs):
         self.seq = [
-            ('client_ctx', UUIDField),
-            ('call_ctx', UUIDField),
+            ('client_ctx', IntField),
             ('client_status', CharField),
             ('client_public_ip', IPField),
             ('client_public_port', IntField)]
@@ -355,8 +346,7 @@ class ClientInviteAck(SignalingMessage):
 class ServerForwardRing(SignalingMessage):
     def __init__(self, *args, **kwargs):
         self.seq = [
-            ('client_ctx', UUIDField),
-            ('call_ctx', UUIDField),
+            ('client_ctx', IntField),
             ('client_status', CharField),
             ('call_type', ByteField),
             ('client_public_ip', IPField),
@@ -367,8 +357,7 @@ class ServerForwardRing(SignalingMessage):
 class ClientAnswer(SignalingMessage):
     def __init__(self, *args, **kwargs):
         self.seq = [
-            ('client_ctx', UUIDField),
-            ('call_ctx', UUIDField),
+            ('client_ctx', IntField),
             ('codec', CharField)]
             
         SignalingMessage.__init__(self, *args, **kwargs)
@@ -376,8 +365,7 @@ class ClientAnswer(SignalingMessage):
 class ClientRTP(BaseMessage):
     def __init__(self, *args, **kwargs):
         self.seq = [
-            ('client_ctx', UUIDField),
-            ('call_ctx', UUIDField),
+            ('client_ctx', IntField),
             ('sequence', IntField),
             ('rtp_bytes_length', ShortField),
             ('rtp_bytes', StringField, lambda: '!%dc' % self.rtp_bytes_length.value)]
@@ -386,17 +374,13 @@ class ClientRTP(BaseMessage):
         
 class HangupRequest(SignalingMessage):
     def __init__(self, *args, **kwargs):
-        self.seq = [
-            ('client_ctx', UUIDField),
-            ('call_ctx', UUIDField)]
+        self.seq = [('client_ctx', IntField)]
             
         SignalingMessage.__init__(self, *args, **kwargs)
         
 class HangupRequestAck(SignalingMessage):
     def __init__(self, *args, **kwargs):
-        self.seq = [
-            ('client_ctx', UUIDField),
-            ('call_ctx', UUIDField)]
+        self.seq = [('client_ctx', IntField)]
             
         SignalingMessage.__init__(self, *args, **kwargs)
         
