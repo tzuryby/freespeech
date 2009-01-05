@@ -12,6 +12,7 @@ import threading, sys, traceback
 
 import dblayer, messages, config
 
+from hashlib import md5
 from messages import *
 from messagefields import *
 from utils import Storage
@@ -108,7 +109,7 @@ class CtxTable(Storage):
     def terminate_call(self, client_ctx):
         call = self.client_call(client_ctx)
         if call:
-            log.debug('hanging up call <%s>' % repr(call.caller_ctx))
+            log.debug('hanging up call <%s>' % repr(call.ctx_id))
             caller_ctx, callee_ctx = call.caller_ctx, call.callee_ctx
             self[caller_ctx].current_call = self[callee_ctx].current_call = None
         else:
@@ -127,16 +128,23 @@ class CtxTable(Storage):
         return (self[client_ctx].current_call 
                 for client_ctx in self.clients_ctx() 
                 if self[client_ctx].current_call)
-                
-    def find_call(self, client_ctx):
+            
+    def calls_ctx(self):
+        '''all active calls contexts ids'''
+        return (call.ctx_id for call in self.calls())
+            
+    def find_call(self, call_ctx):
         for call in self.calls():
-            if call.caller_ctx == client_ctx or call.callee_ctx == client_ctx:
+            if call.ctx_id == call_ctx:
                 return call
-                
         return None
-        
-    def get_other_addr(self, client_ctx):
-        call = ctx_table.find_call(client_ctx)
+                
+    def get_other_addr(self, client_ctx, call_ctx=config.EMPTY_CTX):
+        call = None
+        if call_ctx != config.EMPTY_CTX:
+            call = self.find_call(call_ctx)
+        else:
+            call = self[client_ctx].current_call
             
         if call:
             return self.get_addr(
@@ -144,9 +152,9 @@ class CtxTable(Storage):
                 or call.caller_ctx)
         else:
             log.warning('Cannot find other party\'s context, '
-                'client_ctx  <%s>.'
+                'client_ctx  <%s>, call_ctx <%s>. '
                 'Might be removed at previous hangup request' 
-                 % (repr( client_ctx)))
+                 % (repr( client_ctx), repr(call_ctx)))
         
     def get_addr(self, client_ctx):
         '''return the last ip address registered for this client'''
@@ -158,6 +166,7 @@ class CtxTable(Storage):
             self[client_ctx].addr = (host, port)
             
     def client_call(self, client_ctx):
+        call_ctx = None
         if client_ctx in self.clients_ctx():
             call = self[client_ctx].current_call
             if not call:
@@ -190,7 +199,7 @@ def create_client_context(comm_msg, status=ClientStatus.Unknown):
         '''creates the client context for each new logged in client        
         returns a tuple(ctx_id, client_ctx_data)
         client_ctx_data.keys() =>
-          addr, status, expire, last_keep_alive, ctx_id, client_name
+          addr, status, expire, last_keep_alive, ctx_id, call_ctx, client_name
         '''
         ctx_id = comm_msg.client_ctx
         addr = comm_msg.addr
@@ -214,21 +223,23 @@ def create_client_context(comm_msg, status=ClientStatus.Unknown):
 def create_call_ctx(request):
     try:
         '''creates the call context for each valid invite
-        returns a Storage which contains the call context data
+        returns a tuple(ctx_id, call_ctx_data)
         call_ctx_data.keys() =>
-            caller_ctx, callee_ctx, start_time, answer_time, end_time, codec
+            caller_ctx, callee_ctx, start_time, answer_time, end_time, codec, proto, ctx_id
         '''
         caller_ctx = request.msg.client_ctx.value
-        callee_ctx = hash(request.msg.calle_name.value)
+        callee_ctx = string_to_ctx(request.msg.calle_name.value)
+        ctx_id =  string_to_ctx(caller_ctx, callee_ctx)
         ctx = Storage(
             caller_ctx = caller_ctx,
             callee_ctx = callee_ctx,
             start_time = time.time(),
             answer_time = 0,
             end_time = 0,
-            codec = None
+            codec = None,
+            ctx_id = ctx_id
         )
-        return ctx
+        return (ctx_id, ctx)
     except:
         log.exception('exception')
     
@@ -429,7 +440,7 @@ class CallSession(object):
     def _handle_invite(self, request):
         try:
             caller_ctx = request.msg.client_ctx.value
-            callee_ctx = hash(request.msg.calle_name.value)
+            callee_ctx = string_to_ctx(request.msg.calle_name.value)
             
             # calle is not logged in
             if callee_ctx not in ctx_table:
@@ -447,18 +458,18 @@ class CallSession(object):
                 return self._reject(config.Errors.CodecMismatch, request)
             else:
                 # create call ctx
-                call = create_call_ctx(request)            
+                call_ctx_id, call_ctx = create_call_ctx(request)            
                 # mark the caller as in another call session
-                ctx_table[caller_ctx].current_call = call
+                ctx_table[caller_ctx].current_call = call_ctx
                 # send ServerForwardInvite to the calle
-                return self._forward_invite(call, matched_codecs)
+                return self._forward_invite(call_ctx, matched_codecs)
         except:
             log.exception('exception')
             
-    def _forward_invite(self, call, matched_codecs):
+    def _forward_invite(self, call_ctx, matched_codecs):
         try:
-            caller_ctx = call.caller_ctx
-            callee_ctx = call.callee_ctx
+            caller_ctx = call_ctx.caller_ctx
+            callee_ctx = call_ctx.callee_ctx
             caller_name = ctx_table[caller_ctx].client_name        
             caller_ip, caller_port = ctx_table.get_addr(caller_ctx)
             codec_list = ''.join(matched_codecs)
@@ -466,6 +477,7 @@ class CallSession(object):
             sfi = ServerForwardInvite()
             sfi.set_values(
                 client_ctx = callee_ctx,
+                call_ctx = call_ctx.ctx_id,
                 call_type = config.CallTypes.ViaProxy,
                 client_name_length = len(caller_name),
                 client_name = caller_name,
@@ -492,11 +504,12 @@ class CallSession(object):
             
     def _handle_signaling(self, request):
         try:
-            msg, client_ctx = request.msg, request.client_ctx
+            msg, client_ctx, call_ctx = (
+                request.msg, request.client_ctx, request.call_ctx)
             ctr = None
-            other_addr = ctx_table.get_other_addr(client_ctx)
-            call = ctx_table.find_call(client_ctx)
-            if call:
+            other_addr = ctx_table.get_other_addr(client_ctx, call_ctx)
+            call_ctx_data = ctx_table.find_call(call_ctx)
+            if call_ctx_data:
                 if isinstance(msg, ClientInviteAck):                
                     return self._forward_invite_ack(msg, other_addr)
                 elif isinstance(msg, ClientAnswer):
@@ -506,7 +519,7 @@ class CallSession(object):
             elif isinstance(msg, (HangupRequest)):
                 return self._handle_hangup(request, other_addr)
             else:
-                log.warning('_handle_signaling: call is out of context %s' % repr(client_ctx))
+                log.warning('_handle_signaling: call is out of context %s' % repr(call_ctx))
                 
         except:
             log.exception('exception')
@@ -521,14 +534,13 @@ class CallSession(object):
             
     def _handle_rtp(self, request):
         try:
-            call = ctx_table.find_call(request.client_ctx)
-            if call:
-                other_addr = ctx_table.get_other_addr(request.client_ctx)
+            call_ctx = ctx_table.find_call(request.call_ctx)
+            if call_ctx:
+                other_addr = ctx_table.get_other_addr(request.client_ctx, request.call_ctx)
                 buf = request.msg.serialize()
                 yield CommMessage(other_addr, ClientRTP, buf)
             else:    
-                log.warning('%s _handle_rtp: call is out of context %s' 
-                    % (repr(self) ,repr(rewuest.client_ctx)))
+                log.warning('%s _handle_rtp: call is out of context %s' % (repr(self) ,repr(call_ctx)))
         except:
             log.exception('exception')
             
@@ -550,6 +562,7 @@ class CallSession(object):
             sfr = ServerForwardRing()
             sfr.set_values(
                 client_ctx = cia.client_ctx.value,
+                call_ctx = cia.call_ctx.value,
                 client_status = cia.client_status.value,
                 call_type = call_type,
                 client_public_ip = cia.client_public_ip.value,

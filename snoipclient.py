@@ -59,6 +59,7 @@ class TcpClient(Thread):
 class SnoipClient(object):
     
     def __init__(self, (host, port)):
+        self.call_ctx  = None
         self.client_ctx = None
         self.username = None
         self.client = UdpClient((host, port), self.recv)
@@ -76,6 +77,8 @@ class SnoipClient(object):
                 self.ack_invite(msg)
             elif isinstance(msg, ServerForwardRing):
                 self.invited_ctx = msg.client_ctx.value
+                #print 'current call_ctx', repr(self.call_ctx), 'new call_ctx', repr(msg.call_ctx.value)
+                self.call_ctx = msg.call_ctx.value
                 print 'ringing...'
             elif isinstance(msg, ClientAnswer):
                 self.invited_ctx = msg.client_ctx.value
@@ -105,6 +108,7 @@ class SnoipClient(object):
         
     def ack_invite(self, sfi):
         print 'snoipclient-ack_invite'
+        self.call_ctx = sfi.call_ctx.value
         data = client_invite_ack(sfi)
         self._send(data)
         time.sleep(3)
@@ -113,8 +117,8 @@ class SnoipClient(object):
     def answer(self):
         print 'snoipclient-answer'
         ca = ClientAnswer()
-        ca.set_values(client_ctx=self.client_ctx, codec=Codecs.values()[0])
-        print 'answering a ring of client_ctx:', repr(self.client_ctx)
+        ca.set_values(client_ctx=self.client_ctx, call_ctx=self.call_ctx, codec=Codecs.values()[0])
+        print 'answering a ring of call_ctx:', repr(self.call_ctx)
         self._send(ca.pack())
         
     def _send(self, data):
@@ -122,7 +126,7 @@ class SnoipClient(object):
         
     def feed_rtp(self, rtp_bytes, seq):
         crtp = ClientRTP()
-        crtp.set_values(client_ctx=self.invited_ctx,
+        crtp.set_values(client_ctx=self.invited_ctx, call_ctx=self.call_ctx, 
             sequence=seq, rtp_bytes_length=len(rtp_bytes), rtp_bytes=rtp_bytes)
         self._send(crtp.pack())
         
@@ -141,13 +145,13 @@ class SnoipClient(object):
         
     def request_hangup(self):
         request = HangupRequest()
-        request.set_values(client_ctx = self.client_ctx)
+        request.set_values(client_ctx = self.client_ctx, call_ctx = self.call_ctx)        
         self._send(request.pack())
         print 'requesting hangup'
 
     def ack_hangup(self):
         ack = HangupRequestAck()
-        ack.set_values(client_ctx = self.client_ctx)
+        ack.set_values(client_ctx = self.client_ctx, call_ctx = self.call_ctx)
         self._send(ack.pack())
         print 'acking hangup'
         
@@ -184,10 +188,11 @@ def client_invite_ack(invite):
     cia = ClientInviteAck()
     cia.set_values(
         client_ctx = invite.client_ctx.value,
+        call_ctx = invite.call_ctx.value, 
         client_status = ClientStatus.Ringing,
         client_public_ip = invite.client_public_ip.value, 
         client_public_port = invite.client_public_port.value
     )
     
-    print 'client ack invite of client_ctx:', repr(invite.client_ctx.value)
+    print 'client ack invite of call_ctx:', repr(invite.call_ctx.value)
     return cia.pack()

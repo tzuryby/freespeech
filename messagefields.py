@@ -14,7 +14,7 @@ __all__ = [
     'ShortField',
     'IntField',
     'StringField',
-    #'UUIDField',
+    'UUIDField',
     'IPField',
 ]
 
@@ -112,10 +112,10 @@ class StringField(Field):
         else:
             raise AttributeError
             
-#class UUIDField(StringField):
-    #'''16 bytes uniqueue_id'''
-    #def __init__(self, start, name=None):
-        #StringField.__init__(self, start, '!16c', name)
+class UUIDField(StringField):
+    '''16 bytes uniqueue_id'''
+    def __init__(self, start, name=None):
+        StringField.__init__(self, start, '!16c', name)
         
 class IPField(Field):
     '''16 bytes for IPv6, in IPv4 only the first 4 bytes are used'''
