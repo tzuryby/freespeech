@@ -18,6 +18,8 @@ __all__ = [
     'IPField',
 ]
 
+from logger import log
+
 import struct
    
 class Field(object):
