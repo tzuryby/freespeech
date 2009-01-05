@@ -101,8 +101,4 @@ class DefaultTheme(AnsiColorTheme):
 
 default_theme = DefaultTheme()
 
-import os
-if os.name == 'nt':
-    for prop in default_theme.__dict__:
-        setattr(default_theme, prop, '')
         
