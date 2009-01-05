@@ -12,7 +12,7 @@ from logger import log
 #60 Seconds
 CLIENT_EXPIRE = 60
 
-EMPTY_CTX = '\x00'*16
+EMPTY_CTX = (0,) #'\x00'*16
 
 Codecs = Storage(
     PCMA='\x01', 

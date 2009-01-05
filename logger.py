@@ -61,6 +61,6 @@ class Logger:
         self.logger.exception(theme.style_fail + ''.join(str(i) for i in args) + theme.style_normal)
 
     def warning(self, *args):
-        self.logger.warning(theme.style_watchlist_value + ''.join(str(i) for i in args) + theme.style_normal)
+        self.logger.warning(theme.style_class_name + ''.join(str(i) for i in args) + theme.style_normal)
 
 log = Logger()

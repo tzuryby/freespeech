@@ -396,7 +396,7 @@ def login_handler(request):
             '''returns login-denied reply'''
             ld = ShortResponse()
             ld.set_values(
-                client_ctx = ('\x00 '*16).split(),
+                client_ctx = ('\x00 '*4).split(),
                 result = struct.unpack('!h', Errors.LoginFailure))
             buf = ld.serialize()
             log.info('login error')
@@ -509,7 +509,7 @@ class CallSession(object):
             ctr = None
             other_addr = ctx_table.get_other_addr(client_ctx, call_ctx)
             call_ctx_data = ctx_table.find_call(call_ctx)
-            if call_ctx_data:
+            if call_ctx_data and other_addr:
                 if isinstance(msg, ClientInviteAck):                
                     return self._forward_invite_ack(msg, other_addr)
                 elif isinstance(msg, ClientAnswer):
