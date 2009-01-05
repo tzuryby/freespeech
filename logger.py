@@ -32,7 +32,7 @@ class Logger:
         #self.socket_frmt = logging.Formatter('%(message)s')
         
         self.logger = logging.getLogger('snoip.freespeech')
-        self.logger.setLevel(logging.DEBUG)
+        self.logger.setLevel(logging.INFO)
         
         # file handler
         self.fh = logging.FileHandler('snoip.freespeech.log')
