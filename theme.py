@@ -100,3 +100,9 @@ class DefaultTheme(AnsiColorTheme):
     style_right = Color.red+Color.invert
 
 default_theme = DefaultTheme()
+
+import os
+if os.name == 'nt':
+    for prop in default_theme.__dict__:
+        setattr(default_theme, prop, '')
+        
