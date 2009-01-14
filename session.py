@@ -397,7 +397,7 @@ def login_handler(request):
             '''returns login-denied reply'''
             ld = ShortResponse()
             ld.set_values(
-                client_ctx = 0, #('\x00 '*4).split(),
+                client_ctx = ('\x00 '*4).split(),
                 result = struct.unpack('!h', Errors.LoginFailure))
             buf = ld.serialize()
             log.info('login error')
