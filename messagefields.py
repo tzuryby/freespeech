@@ -18,10 +18,7 @@ __all__ = [
     'IPField',
 ]
 
-<<<<<<< HEAD:messagefields.py
 from logger import log
-=======
->>>>>>> ba4df24... login_deny bug + import log at msgfields:messagefields.py
 import struct
    
 class Field(object):
