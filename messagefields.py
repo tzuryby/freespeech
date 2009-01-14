@@ -20,7 +20,7 @@ __all__ = [
 
 from logger import log
 
-import struct
+import struct, traceback
    
 class Field(object):
     def __init__(self, start, format, name=None):
@@ -34,6 +34,7 @@ class Field(object):
     def pack_into(self, buf):
         '''packs the value into a supplied buffer'''
         try:
+            #log.debug(traceback.print_stack())
             struct.pack_into(self.format, buf, self.start, *self._value)
         except Exception, inst:
             log.exception('exception')
@@ -105,8 +106,6 @@ class StringField(Field):
                 self.__dict__[k] = v
         except:
             log.exception('exception')
-            #print 'error@StringField.__setattr__\nname %s, k %s,v %s, format %s, length %s' % (
-            #    self.name, k, v, self.format, self.length)
             
     def __getattr__(self, k):
         if k == 'value':
@@ -122,7 +121,7 @@ class UUIDField(StringField):
 class IPField(Field):
     '''16 bytes for IPv6, in IPv4 only the first 4 bytes are used'''
     def __init__(self, start, name=None):
-        Field.__init__(self, start, '!16b', name)
+        Field.__init__(self, start, '!16B', name)
         
     def __setattr__(self, k, v):
         '''a wrapper around x.value'''
