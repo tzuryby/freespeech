@@ -19,6 +19,7 @@ __all__ = [
 ]
 
 from logger import log
+
 import struct
    
 class Field(object):
@@ -29,7 +30,6 @@ class Field(object):
         self.length = struct.calcsize(self.format)
         self.end = self.start + self.length
         self.name = name
-        self.value = None
         
     def pack_into(self, buf):
         '''packs the value into a supplied buffer'''
@@ -90,13 +90,12 @@ class StringField(Field):
             Field.__init__(self, start, format, name)
         except:
             log.exception('exception')
+            #print 'error@StringField.__init__\nstart %s, format %s, name %s' % (
+            #    start, format, name)
             
     def __setattr__(self, k, v):
         try:
-            if v is None:
-                import traceback
-                traceback.print_stack()
-            elif k == 'value':
+            if k == 'value':
                 '''a wrapper around x.value'''
                 # if you change the format you must change the length as well.
                 self.format = '!%dc' % len(v)

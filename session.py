@@ -117,11 +117,11 @@ class CtxTable(Storage):
             
     def clients_ctx(self):
         '''all active clients (the keys)'''
-        return self.iterkeys()
+        return self.keys()
             
     def clients(self):
         '''all active clients (the values)'''
-        return self.itervalues()
+        return self.values()
             
     def calls(self):
         '''all active calls'''
@@ -153,7 +153,7 @@ class CtxTable(Storage):
         else:
             log.warning('Cannot find other party\'s context, '
                 'client_ctx  <%s>, call_ctx <%s>. '
-                'Perhaps it removed at previous hangup request' 
+                'Might be removed at previous hangup request' 
                  % (repr( client_ctx), repr(call_ctx)))
         
     def get_addr(self, client_ctx):
@@ -199,7 +199,7 @@ def create_client_context(comm_msg, status=ClientStatus.Unknown):
         '''creates the client context for each new logged in client        
         returns a tuple(ctx_id, client_ctx_data)
         client_ctx_data.keys() =>
-          addr, status, expire, last_keep_alive, ctx_id, current_call, client_name
+          addr, status, expire, last_keep_alive, ctx_id, call_ctx, client_name
         '''
         ctx_id = comm_msg.client_ctx
         addr = comm_msg.addr
@@ -359,7 +359,6 @@ def keep_alive_handler(request):
         )
         
         yield CommMessage(request.addr, KeepAliveAck, kaa.serialize())
-        
     except:
         log.exception('exception')
     
@@ -397,7 +396,7 @@ def login_handler(request):
             '''returns login-denied reply'''
             ld = ShortResponse()
             ld.set_values(
-                client_ctx = ('\x00 '*4).split(),
+                client_ctx = 0, #('\x00 '*4).split(),
                 result = struct.unpack('!h', Errors.LoginFailure))
             buf = ld.serialize()
             log.info('login error')
@@ -408,7 +407,6 @@ def login_handler(request):
     try:
         username, password = request.msg.username.value, request.msg.password.value
         dbuser = verify_login(username, password)
-        
         if dbuser:
             #creates new client context and register it
             ctx_id, ctx_data = create_client_context(request, status=dbuser.login_status)    
@@ -416,7 +414,6 @@ def login_handler(request):
             return login_reply(ctx_id, ctx_data)
         else:
             return deny_login()
-            
     except:
         log.exception('exception')
         
@@ -507,14 +504,12 @@ class CallSession(object):
             
     def _handle_signaling(self, request):
         try:
-            msg = request.msg
-            client_ctx = request.client_ctx
-            call_ctx = request.call_ctx
-            other_addr = ctx_table.get_other_addr(client_ctx, call_ctx)
-            #current_call = ctx_table.find_call(call_ctx)
+            msg, client_ctx, call_ctx = (
+                request.msg, request.client_ctx, request.call_ctx)
             ctr = None
-            
-            if other_addr and ctx_table.find_call(call_ctx):
+            other_addr = ctx_table.get_other_addr(client_ctx, call_ctx)
+            call_ctx_data = ctx_table.find_call(call_ctx)
+            if call_ctx_data and other_addr:
                 if isinstance(msg, ClientInviteAck):                
                     return self._forward_invite_ack(msg, other_addr)
                 elif isinstance(msg, ClientAnswer):

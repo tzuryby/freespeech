@@ -1,7 +1,3 @@
-__author__ = 'Tzury Bar Yochay'
-__version__ = '0.1'
-__license__ = 'GPLv3'
-
 #
 # The color mechanism is taken from Scapy:
 # http://www.secdev.org/projects/scapy/
@@ -104,3 +100,5 @@ class DefaultTheme(AnsiColorTheme):
     style_right = Color.red+Color.invert
 
 default_theme = DefaultTheme()
+
+        

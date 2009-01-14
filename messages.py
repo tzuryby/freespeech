@@ -106,7 +106,8 @@ class CommMessage(object):
     '''Wrapps message with additional data.
     Encapsulates the address, the type of the message(Class) 
     and the context fields for the message (client, call)'''
-    
+    addr = msg_type = body = msg_type = client_ctx = None
+
     def __init__(self, addr, msg_type, body):
         self.addr = addr
         self.msg_type = msg_type
@@ -130,8 +131,9 @@ class CommMessage(object):
             self.addr, self.client_ctx, self.msg_type, repr(self.msg))
                     
 class BaseMessage(object):
-    seq = None
+    seq = [] # the sequence of fields stored in the buffer
     buf = None
+    
     def __init__(self, *args, **kwargs):
         if 'buf' in kwargs:
             self.deserialize(kwargs['buf'])
@@ -147,15 +149,15 @@ class BaseMessage(object):
                 length = sum((self.__dict__[field[0]].length for field in self.seq))
                 self.buf = self._create_buffer(length)
                 
-            elif newbuffer:                    
+            elif newbuffer:
+                # self.buf never initialized
+                if not self.buf:
+                    self.buf = self._create_buffer(len(newbuffer))
+                    
                 # assign or copy the string-value into self.buf
                 if hasattr(newbuffer, 'raw'):
                     self.buf = newbuffer
                 elif isinstance(newbuffer,str):
-                    # self.buf never initialized
-                    if not self.buf:
-                        self.buf = self._create_buffer(len(newbuffer))
-                        
                     self.buf.raw = newbuffer
         except:
             log.exception('exception')
@@ -172,8 +174,7 @@ class BaseMessage(object):
             if buf:
                 self._init_buffer(buf)
                 
-            self._set_values(self.seq)
-            
+            self._set_values(self.seq)        
         except:
             log.exception('exception')
         
@@ -181,7 +182,6 @@ class BaseMessage(object):
         try:
             items = (p for p in self.seq if p[0] in kwargs)
             self._set_values(items, kwargs)
-            
         except:
             log.exception('exception')
             
@@ -192,7 +192,6 @@ class BaseMessage(object):
                 ((self.__dict__[field[0]].name, 
                         self.__dict__[field[0]].value) for field in self.seq))
             return x
-            
         except:
             log.exception('exception')        
         
@@ -222,7 +221,6 @@ class BaseMessage(object):
                     
                 #next field starting point
                 start = self.__dict__[key].end
-                
         except:
             log.exception('exception')
             
