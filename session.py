@@ -12,7 +12,6 @@ import threading, sys, traceback
 
 import dblayer, messages, config
 
-from hashlib import md5
 from messages import *
 from messagefields import *
 from utils import Storage
@@ -21,6 +20,10 @@ from decorators import printargs
 from logger import log
 from twisted.internet import reactor
 from logger import log
+
+from pprint import PrettyPrinter
+
+ppformat = PrettyPrinter().pformat
 
 rlock = lambda: threading.RLock()
 
@@ -243,7 +246,9 @@ def create_call_ctx(request):
     except:
         log.exception('exception')
     
-
+def print_ctx():
+    log.info('\n','active clients: ', '\n', ppformat (ctx_table))
+    
 def remove_old_clients():
     try:
         while thread_loop_active:
@@ -259,7 +264,9 @@ def remove_old_clients():
                     time.sleep(1)
                 else:
                     break
-                
+            
+            print_ctx()
+            
         log.info('terminating thread: remove_old_clients')
     except:
         log.exception('exception')
@@ -444,10 +451,12 @@ class CallSession(object):
             
             # calle is not logged in
             if callee_ctx not in ctx_table:
+                log.info('client_ctx ', callee_ctx, ' does not exist, rejecting invite.')
                 return self._reject(config.Errors.CalleeNotFound, request)
                 
             # calle is in another call session
             elif ctx_table[callee_ctx].current_call:
+                log.info('client_ctx ', callee_ctx, ' is busy in another call, rejecting invite.')
                 return self._reject(config.Errors.CalleeUnavailable, request)
                 
             #todo: add here `away-status` case handler
@@ -455,6 +464,7 @@ class CallSession(object):
             log.debug('matched_codecs: %s' % matched_codecs)
             # caller codecs do not match with the server's
             if not matched_codecs:
+                log.info('codecs mismatch -- rejecting invite')
                 return self._reject(config.Errors.CodecMismatch, request)
             else:
                 # create call ctx
@@ -520,6 +530,7 @@ class CallSession(object):
                 return self._handle_hangup(request, other_addr)
             else:
                 log.warning('_handle_signaling: call is out of context %s' % repr(call_ctx))
+                print_ctx()
                 
         except:
             log.exception('exception')
@@ -541,6 +552,7 @@ class CallSession(object):
                 yield CommMessage(other_addr, ClientRTP, buf)
             else:    
                 log.warning('%s _handle_rtp: call is out of context %s' % (repr(self) ,repr(call_ctx)))
+                print_ctx()
         except:
             log.exception('exception')
             

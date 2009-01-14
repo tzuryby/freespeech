@@ -43,14 +43,15 @@ __all__ = [
     
 import struct
 from ctypes import create_string_buffer
-from hashlib import md5
 from utils import Storage
 from logger import log
 from messagefields import *
 
 def string_to_ctx(*args):
     v = ''.join((str(arg) for arg in args))
-    return hash(v)
+    h = hash(v)
+    log.debug('hashing %s as %d' % (repr(v), h))
+    return h
 
 class Parser(object):
     def __init__(self):
@@ -121,7 +122,7 @@ class CommMessage(object):
             
         elif isinstance(self.msg, (LoginRequest,)):
             client_ctx = string_to_ctx(self.msg.username.value)
-            log.info('a new client_ctx', 'username: %s ctx: %s' % (self.msg.username.value ,repr(client_ctx)))
+            log.info('a new client_ctx ', 'username: %s ctx: %s' % (self.msg.username.value ,repr(client_ctx)))
             self.client_ctx = client_ctx
             
         self.call_ctx = getattr(self.msg, 'call_ctx', None) and self.msg.call_ctx.value

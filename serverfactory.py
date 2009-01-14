@@ -63,7 +63,6 @@ class UDPServer(DatagramProtocol):
         pass
         
     def datagramReceived(self, data, (host, port)):
-        #print 'received:', (host, port), repr(data)
         if not (host, port) in self.echoers:
             self.echoers.append((host, port))
         
@@ -113,9 +112,9 @@ def serve(listeners):
         session.servers_pool.add(proto, starter)
         log.info( 'serving %s on port %s' % (proto, port))
         
-    broadcast = TCPServerFactory()
-    broadcast.protocol = BroadcastLoggingServer
-    reactor.listenTCP(9020,broadcast)
+    #broadcast = TCPServerFactory()
+    #broadcast.protocol = BroadcastLoggingServer
+    #reactor.listenTCP(9020,broadcast)
         
     reactor.run(installSignalHandlers=0)
     
