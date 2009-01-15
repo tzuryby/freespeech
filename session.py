@@ -9,8 +9,9 @@ __license__ = 'GPLv3'
 
 import time, Queue, struct, uuid 
 import threading, sys, traceback
-
 import dblayer, messages, config
+
+from twisted.internet import reactor
 
 from messages import *
 from messagefields import *
@@ -18,15 +19,11 @@ from utils import Storage
 from config import *
 from decorators import printargs
 from logger import log
-from twisted.internet import reactor
 from logger import log
-
 from pprint import PrettyPrinter
 
 ppformat = PrettyPrinter().pformat
-
 rlock = lambda: threading.RLock()
-
 thread_loop_active = True
 
 class Packer(object):
@@ -47,7 +44,7 @@ class Packer(object):
                     msg_type, buf = self.parser.body(self.clients[client])
                     ctr = MessageTypes[msg_type]
                     cm = CommMessage(client, ctr, buf)
-                    self.queue.put(cm)                    
+                    self.queue.put(cm)
                 else:
                     log.warning('unpackable (invalid) message %s' % repr(msg))
                 
@@ -101,20 +98,25 @@ class ServersPool(Storage):
 class CtxTable(Storage):
     def add_client(self, (client_ctx, data)):
         with rlock():
-            self[client_ctx] =data
+            self[client_ctx] = data
             
     def remove_client(self, client_ctx):
-        '''todo: check if need to clean the the call record at the other party'''
         with rlock():
-            if self.get(client_ctx):
+            client = self.get(client_ctx):
+            if client:
+                # clear other's party call before removing this party
+                self.terminate_call(client_ctx)
                 del self[client_ctx]
-            
+        
     def terminate_call(self, client_ctx):
         call = self.client_call(client_ctx)
         if call:
             log.debug('hanging up call <%s>' % repr(call.ctx_id))
             caller_ctx, callee_ctx = call.caller_ctx, call.callee_ctx
-            self[caller_ctx].current_call = self[callee_ctx].current_call = None
+            if self.get(caller_ctx):
+                self[caller_ctx].current_call = None
+            if self.get(callee_ctx):
+                self[callee_ctx].current_call = None
         else:
             log.debug('no calls for client <%s>' % repr(client_ctx))
             
@@ -189,7 +191,11 @@ class CtxTable(Storage):
     def clients_status(self):
         '''all connected clients user names and their status (name, status)'''
         return ((self[ctx].client_name, self[ctx].status) for ctx in self.clients_ctx())
-            
+        
+    def pprint(self):
+        log.info('active clients: ',ppformat([(x.ctx_id, x.client_name) for x in self.itervalues()]))
+        log.info('context table:','\n', ppformat (self))
+        
 def recv_msg(caller, (host, port), msg):
     try:
         '''every server, onDataReceived call this function with the data'''
@@ -245,10 +251,7 @@ def create_call_ctx(request):
         return (ctx_id, ctx)
     except:
         log.exception('exception')
-    
-def print_ctx():
-    log.info('\n','active clients: ', '\n', ppformat (ctx_table))
-    
+        
 def remove_old_clients():
     try:
         while thread_loop_active:
@@ -265,7 +268,7 @@ def remove_old_clients():
                 else:
                     break
             
-            print_ctx()
+            ctx_table.pprint()
             
         log.info('terminating thread: remove_old_clients')
     except:
@@ -530,7 +533,7 @@ class CallSession(object):
                 return self._handle_hangup(request, other_addr)
             else:
                 log.warning('_handle_signaling: call is out of context %s' % repr(call_ctx))
-                print_ctx()
+                ctx_table.pprint()
                 
         except:
             log.exception('exception')
@@ -552,7 +555,7 @@ class CallSession(object):
                 yield CommMessage(other_addr, ClientRTP, buf)
             else:    
                 log.warning('%s _handle_rtp: call is out of context %s' % (repr(self) ,repr(call_ctx)))
-                print_ctx()
+                ctx_table.pprint()
         except:
             log.exception('exception')
             
