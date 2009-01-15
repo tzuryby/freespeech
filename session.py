@@ -102,7 +102,7 @@ class CtxTable(Storage):
             
     def remove_client(self, client_ctx):
         with rlock():
-            client = self.get(client_ctx):
+            client = self.get(client_ctx)
             if client:
                 # clear other's party call before removing this party
                 self.terminate_call(client_ctx)
