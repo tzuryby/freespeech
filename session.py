@@ -192,11 +192,8 @@ class CtxTable(Storage):
         '''all connected clients user names and their status (name, status)'''
         return ((self[ctx].client_name, self[ctx].status) for ctx in self.clients_ctx())
         
-    def __repr__(self):
-        return '<ContextTable\n%s>' % ppformat (self)
-        
     def pprint(self):
-        log.info(self)
+        log.info('<ContextTable\n%s>' % ppformat (self))
         
 def recv_msg(caller, (host, port), msg):
     try:
