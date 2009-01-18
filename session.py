@@ -19,7 +19,6 @@ from utils import Storage
 from config import *
 from decorators import printargs
 from logger import log
-from logger import log
 from pprint import PrettyPrinter
 
 ppformat = PrettyPrinter().pformat
@@ -180,18 +179,6 @@ class CtxTable(Storage):
                         return call
             return call
             
-    def keep_alives(self): # <-- never used
-        '''generator of tuples (client_ctx_id, last_keep_alive)'''
-        return ((ctx, self[ctx].last_keep_alive) for ctx in self)
-            
-    def clients_names(self): # <-- never used
-        '''all connected clients user names'''
-        return (client.client_name for client in self.clients())
-            
-    def clients_status(self): # <-- never used
-        '''all connected clients user names and their status (name, status)'''
-        return ((self[ctx].client_name, self[ctx].status) for ctx in self.clients_ctx())
-        
     def pprint(self):
         log.info('<ContextTable\n%s>' % ppformat (self))
         

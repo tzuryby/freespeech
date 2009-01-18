@@ -92,8 +92,7 @@ class BroadcastLoggingServer(BroadcastServer):
             pass
         data = logging.makeLogRecord(data)
         BroadcastServer.dataReceived(data)
-
-
+        
 start_tcp = TCPServerFactory
 start_udp = UDPServer
 
