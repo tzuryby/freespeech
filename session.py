@@ -311,6 +311,12 @@ def _filter(request):
                 'msg_type/client_ctx: %s, %s, %s'
                 %(repr(ctx), repr(msg_type), repr(msg)))                
         else:
+            # context exists or login-request
+            
+            if msg_type not in (LoginRequest, Logout):
+                # update (host,port) at ctx_table
+                ctx_table[request.client_ctx].addr = request.addr
+                
             switch = {
                 LoginRequest: login_handler,
                 Logout: logout_handler,

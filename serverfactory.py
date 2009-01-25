@@ -26,6 +26,9 @@ class TCPServer(Protocol):
         log.info('tcp_connection from %s' % repr(self.transport.client))
         
     def dataReceived(self, data):
+        if not (host, port) in self.factory.echoers:
+            self.factory.echoers.append((host, port))
+            
         host, port = self.transport.client
         self.dataReceivedHandler((host, port), data)
         

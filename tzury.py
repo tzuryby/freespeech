@@ -17,17 +17,19 @@ time.sleep(3)
 sc.send_keep_alive()
 time.sleep(1)
 
-#send invite
-sc.invite('120')
+for i in xrange(10):
+    #send invite
+    sc.invite('120')
 
-#pause and let replies arrive
-time.sleep(4)
+    #pause and let replies arrive
+    time.sleep(4)
 
-with open('large_data.rtp', 'r') as lines:
-    i = 0
-    for line in lines:
-        sc.feed_rtp(line, i)
-        i+=1
-        time.sleep(0.5)
-        
-sc.request_hangup()
+    with open('large_data.rtp', 'rb') as lines:
+        i = 0
+        for line in lines:
+            sc.feed_rtp(line, i)
+            i+=1
+            time.sleep(0.5)
+            
+    sc.request_hangup()
+    time.sleep(3)
