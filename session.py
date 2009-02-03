@@ -141,7 +141,7 @@ class CtxTable(Storage):
         '''all active calls contexts ids'''
         return (call.ctx_id for call in self.calls())
             
-    def find_call(self, call_ctx):
+        def find_call(self, call_ctx):
         for call in self.calls():
             if call.ctx_id == call_ctx:
                 return call
@@ -359,7 +359,7 @@ def touch_client(ctx, msg_type):
             expire = time_stamp + CLIENT_EXPIRE
             ctx_table[ctx].last_keep_alive = time_stamp
             ctx_table[ctx].expire = expire
-            log.info('TOUCHING ' + repr(ctx))
+            #log.info('TOUCHING ' + repr(ctx))
             if ctx_table[ctx].current_call:
                 caller = ctx_table[ctx].current_call.caller_ctx
                 callee = ctx_table[ctx].current_call.callee_ctx
@@ -473,8 +473,10 @@ class CallSession(object):
                 
             # calle is in another call session
             elif ctx_table[callee_ctx].current_call:
-                log.info('client_ctx ', callee_ctx, ' is busy in another call, rejecting invite.')
-                return self._reject(config.Errors.CalleeUnavailable, request)
+                if ctx_table[callee_ctx].current_call.callee_ctx != callee_ctx \ 
+                and ctx_table[callee_ctx].current_call.caller_ctx != caller_ctx:
+                    log.info('client_ctx ', callee_ctx, ' is busy in another call, rejecting invite.')
+                    return self._reject(config.Errors.CalleeUnavailable, request)
                 
             #todo: add here `away-status` case handler
             matched_codecs = self._matched_codecs(request.msg.codec_list.value)
