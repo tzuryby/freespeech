@@ -77,7 +77,7 @@ class Packer(object):
 '''a pool of all the listeners (tcp+udp) and their known clients'''
 class ServersPool(Storage):
     def send_to(self, (host, port), data):
-        if all(host, port, data):
+        if all((host, port, data)):
             listener = self.known_address((host, port))
             if listener:
                 listener.server.send_to((host, port), data)
