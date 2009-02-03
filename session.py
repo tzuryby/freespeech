@@ -362,8 +362,8 @@ def touch_client(ctx, msg_type):
             expire = time_stamp + CLIENT_EXPIRE
             ctx_table[ctx].last_keep_alive = time_stamp
             ctx_table[ctx].expire = expire
-            #log.info('TOUCHING ' + repr(ctx))
-            if ctx_table[ctx].current_call:
+            
+            if ctx_table[ctx].current_call and msg_type == ClientRTP:
                 caller = ctx_table[ctx].current_call.caller_ctx
                 callee = ctx_table[ctx].current_call.callee_ctx
                 ctx_table[caller].current_call.rtp_expire = expire
@@ -475,7 +475,7 @@ class CallSession(object):
                 return self._reject(config.Errors.CalleeNotFound, request)
                 
             # calle is in another call session
-            elif ctx_table[callee_ctx].current_call:
+            elif ctx_table[callee_ctx].current_call or callee_ctx == caller_ctx:
                 log.info('client_ctx ', callee_ctx, ' is busy in another call, rejecting invite.')
                 return self._reject(config.Errors.CalleeUnavailable, request)
             
