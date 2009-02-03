@@ -296,7 +296,7 @@ def handle_outbound_queue():
     while thread_loop_active:
         try:
             reply = outbound_messages.get(block=0)
-            if reply and hasattr(reply, 'msg') and hasattr(reply, 'addr'):
+            if reply and getattr(reply, 'msg') and getattr(reply, 'addr'):
                 log.info('server sends %s to %s' % (
                     reply.msg_type, repr(reply.addr)))
                 try:
