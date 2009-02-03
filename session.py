@@ -473,11 +473,11 @@ class CallSession(object):
                 
             # calle is in another call session
             elif ctx_table[callee_ctx].current_call:
-                call = ctx_table[callee_ctx].current_call
-                if call.caller_ctx != callee_ctx and call.callee_ctx != caller_ctx:
-                    log.info('client_ctx ', callee_ctx, ' is busy in another call, rejecting invite.')
-                    return self._reject(config.Errors.CalleeUnavailable, request)
-                
+                #call = ctx_table[callee_ctx].current_call
+                #if call.caller_ctx != callee_ctx and call.callee_ctx != caller_ctx:
+                log.info('client_ctx ', callee_ctx, ' is busy in another call, rejecting invite.')
+                return self._reject(config.Errors.CalleeUnavailable, request)
+            
             #todo: add here `away-status` case handler
             matched_codecs = self._matched_codecs(request.msg.codec_list.value)
             log.debug('matched_codecs: %s' % matched_codecs)
