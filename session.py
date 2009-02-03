@@ -365,12 +365,12 @@ def touch_client(ctx, msg_type):
             expire = time_stamp + CLIENT_EXPIRE
             ctx_table[ctx].last_keep_alive = time_stamp
             ctx_table[ctx].expire = expire
-            if msg_type == ClientRTP:
+            if msg_type in (ClientRTP, KeepAlive):
                 # touch both sides
                 for party in ctx_table.iter_call_parties(ctx):
                     if party:
                         party.rtp_expire = time_stamp + RTP_EXPIRE
-            
+                
     except:
         log.exception('exception')        
         
