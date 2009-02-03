@@ -74,15 +74,19 @@ class Packer(object):
         except:
             log.exception('exception')
 
-'''a pool of all the listeners (tcp+udp) and thier known clients'''
+'''a pool of all the listeners (tcp+udp) and their known clients'''
 class ServersPool(Storage):
     def send_to(self, (host, port), data):
-        if (host, port) is not None:
+        if all(host, port, data):
             listener = self.known_address((host, port))
             if listener:
                 listener.server.send_to((host, port), data)
                 return
-                
+            else:
+                log.info("Unknown address %s:%s at ServerPool.send_to" % (host, port))
+        else:
+            log.info("Invalid args (%s,%s,%s) at ServerPool.send_to" % (host, port, repr(data)))
+            
     def known_address(self, (host, port)):
         '''returns true if found a server which is connected to the client at the specified address'''
         for id, listener in self.iteritems():
@@ -137,11 +141,18 @@ class CtxTable(Storage):
         '''all active calls contexts ids'''
         return (call.ctx_id for call in self.calls())
             
+    def iter_call_parties(self, call_ctx):
+        for call in self.calls():
+            if call.ctx_id == call_ctx:
+                yield call
+        yield None
+    
     def find_call(self, call_ctx):
         for call in self.calls():
             if call.ctx_id == call_ctx:
                 return call
         return None
+    
                 
     def get_other_addr(self, client_ctx, call_ctx=config.EMPTY_CTX):
         call = None
@@ -158,7 +169,7 @@ class CtxTable(Storage):
             log.warning('Cannot find other party\'s context, '
                 'client_ctx  <%s>, call_ctx <%s>. '
                 'Might be removed at previous hangup request' 
-                 % (repr( client_ctx), repr(call_ctx)))
+                % (repr( client_ctx), repr(call_ctx)))
         
     def get_addr(self, client_ctx):
         '''return the last ip address registered for this client'''
@@ -231,6 +242,7 @@ def create_call_ctx(request):
             start_time = time.time(),
             answer_time = 0,
             end_time = 0,
+            rtp_expire = 0,
             codec = None,
             ctx_id = ctx_id
         )
@@ -247,7 +259,14 @@ def remove_old_clients():
             for ctx_id in expired_clients:
                 log.info('removing inactive client ' + repr(ctx_id))
                 ctx_table.remove_client(ctx_id)
-                    
+            
+            expired_calls = [client.ctx_id for client in ctx_table.clients() 
+                if client.current_call and client.current_call.rtp_expire < now
+            ]
+            for call in expired_calls:
+                log.warning('terminating inactive call at client ' + repr(call))
+                ctx_table.terminate_call(call)
+                
             for i in xrange(CLIENT_EXPIRE):
                 if thread_loop_active:
                     time.sleep(1)
@@ -335,17 +354,22 @@ def _filter(request):
             for msg in _out:
                 outbound_messages.put(msg)
             if ctx:
-                touch_client(request.client_ctx)
+                touch_client(request.client_ctx, request.msg_type)
     except:
         log.exception('exception')
         
-def touch_client(ctx):
+def touch_client(ctx, msg_type):
     try:
         if ctx in ctx_table:
             time_stamp = time.time()
             expire = time_stamp + CLIENT_EXPIRE
             ctx_table[ctx].last_keep_alive = time_stamp
             ctx_table[ctx].expire = expire
+            if msg_type == ClientRTP:
+                # touch both sides
+                for party in ctx_table.iter_call_parties(ctx):
+                    if party:
+                        party.rtp_expire = time_stamp + RTP_EXPIRE
             
     except:
         log.exception('exception')        
@@ -542,13 +566,13 @@ class CallSession(object):
             
     def _handle_rtp(self, request):
         try:
-            call_ctx = ctx_table.find_call(request.call_ctx)
-            if call_ctx:
+            call = ctx_table.find_call(request.call_ctx)
+            if call:
                 other_addr = ctx_table.get_other_addr(request.client_ctx, request.call_ctx)
                 buf = request.msg.serialize()
                 yield CommMessage(other_addr, ClientRTP, buf)
-            else:    
-                log.warning('%s _handle_rtp: call is out of context %s' % (repr(self) ,repr(call_ctx)))
+            else:
+                log.warning('%s _handle_rtp: call is out of context %s' % (repr(self) ,repr(call)))
                 ctx_table.pprint()
         except:
             log.exception('exception')

@@ -12,6 +12,8 @@ from logger import log
 #60 Seconds
 CLIENT_EXPIRE = 60
 
+RTP_EXPIRE = 20
+
 EMPTY_CTX = (0,) #'\x00'*16
 
 Codecs = Storage(
