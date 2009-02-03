@@ -142,10 +142,11 @@ class CtxTable(Storage):
         return (call.ctx_id for call in self.calls())
             
     def iter_call_parties(self, call_ctx):
-        for call in self.calls():
-            if call.ctx_id == call_ctx:
-                yield call
-        yield None
+        print 'iterating call parties of:', repr(call_ctx)
+        return (ctx.current_call.ctx_id 
+                    for ctx in self 
+                        if self[ctx].current_call 
+                        and self[ctx].current_call.ctx_id == call_ctx)
     
     def find_call(self, call_ctx):
         for call in self.calls():
@@ -365,13 +366,29 @@ def touch_client(ctx, msg_type):
             expire = time_stamp + CLIENT_EXPIRE
             ctx_table[ctx].last_keep_alive = time_stamp
             ctx_table[ctx].expire = expire
-            if msg_type in (ClientRTP, KeepAlive):
-                log.info('TOUCHING CALL TIME STAMP')
-                # touch both sides
-                for party in ctx_table.iter_call_parties(ctx):
-                    if party:
-                        log.info('TOUCHING ' + party)
-                        party.rtp_expire = time_stamp + RTP_EXPIRE
+            log.info('TOUCHING ' + repr(ctx))
+            ctx_table.pprint()
+            if ctx_table[ctx].current_call:
+                caller = ctx_table[ctx].current_call.caller_ctx
+                callee = ctx_table[ctx].current_call.callee_ctx
+                log.info('TOUCHING ' + repr((caller, callee)))
+                #ctx_table[ctx].current_call.rtp_expire = expire
+                ctx_table[caller].current_call.rtp_expire = expire
+                ctx_table[callee].current_call.rtp_expire = expire
+                
+                #calls = list(ctx_table.iter_call_parties(ctx))
+                #print calls               
+                #for ctx2 in calls:
+                    #log.info('TOUCHING ' + call)
+                    #ctx_table[ctx2].current_call.rtp_expire = expire
+                    
+            #if msg_type in (ClientRTP, KeepAlive):
+                #log.info('TOUCHING CALL TIME STAMP')
+                ## touch both sides
+                #for party in ctx_table.iter_call_parties(ctx):
+                    #if party:
+                        #log.info('TOUCHING ' + party)
+                        #party.rtp_expire = time_stamp + RTP_EXPIRE
                 
     except:
         log.exception('exception')        
@@ -494,6 +511,7 @@ class CallSession(object):
                 call_ctx_id, call_ctx = create_call_ctx(request)            
                 # mark the caller as in another call session
                 ctx_table[caller_ctx].current_call = call_ctx
+                ctx_table[callee_ctx].current_call = call_ctx
                 # send ServerForwardInvite to the calle
                 return self._forward_invite(call_ctx, matched_codecs)
         except:
