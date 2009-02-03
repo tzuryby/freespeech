@@ -141,7 +141,7 @@ class CtxTable(Storage):
         '''all active calls contexts ids'''
         return (call.ctx_id for call in self.calls())
             
-        def find_call(self, call_ctx):
+    def find_call(self, call_ctx):
         for call in self.calls():
             if call.ctx_id == call_ctx:
                 return call
@@ -473,8 +473,8 @@ class CallSession(object):
                 
             # calle is in another call session
             elif ctx_table[callee_ctx].current_call:
-                if ctx_table[callee_ctx].current_call.callee_ctx != callee_ctx \ 
-                and ctx_table[callee_ctx].current_call.caller_ctx != caller_ctx:
+                call = ctx_table[callee_ctx].current_call
+                if call.caller_ctx != callee_ctx and call.callee_ctx != caller_ctx:
                     log.info('client_ctx ', callee_ctx, ' is busy in another call, rejecting invite.')
                     return self._reject(config.Errors.CalleeUnavailable, request)
                 
