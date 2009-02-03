@@ -366,8 +366,10 @@ def touch_client(ctx, msg_type):
             if ctx_table[ctx].current_call and msg_type == ClientRTP:
                 caller = ctx_table[ctx].current_call.caller_ctx
                 callee = ctx_table[ctx].current_call.callee_ctx
-                ctx_table[caller].current_call.rtp_expire = expire
-                ctx_table[callee].current_call.rtp_expire = expire
+                if ctx_table[caller].current_call:
+                    ctx_table[caller].current_call.rtp_expire = expire
+                if ctx_table[callee].current_call:
+                    ctx_table[callee].current_call.rtp_expire = expire
                 
                 
     except:
