@@ -28,7 +28,7 @@ class Logger:
         self.stream_frmt = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
         
         self.logger = logging.getLogger('snoip.freespeech')
-        self.logger.setLevel(logging.DEBUG)
+        self.logger.setLevel(logging.INFO)
         
         # file handler
         self.fh = logging.FileHandler('snoip.freespeech.log')

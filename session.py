@@ -114,14 +114,14 @@ class CtxTable(Storage):
     def terminate_call(self, client_ctx):
         call = self.client_call(client_ctx)
         if call:
-            log.debug('hanging up call <%s>' % repr(call.ctx_id))
+            log.info('hanging up call <%s>' % repr(call.ctx_id))
             caller_ctx, callee_ctx = call.caller_ctx, call.callee_ctx
             if self.get(caller_ctx):
                 self[caller_ctx].current_call = None
             if self.get(callee_ctx):
                 self[callee_ctx].current_call = None
         else:
-            log.debug('no calls for client <%s>' % repr(client_ctx))
+            log.info('no calls for client <%s>' % repr(client_ctx))
             
     def clients_ctx(self):
         '''all active clients (the keys)'''
@@ -279,8 +279,11 @@ def handle_inbound_queue():
             try:
                 req = inbound_messages.get(block=0)
                 if req:
-                    log.debug('server received %s to %s [%s]' % (
-                        req.msg_type, repr(req.addr), repr(req.body)))
+                    if req.msg_type != ClientRTP:
+                        log.info('server received %s to %s' % (req.msg_type, repr(req.addr)))
+                    else:
+                        log.debug('server received %s to %s' % (req.msg_type, repr(req.addr)))
+                        
                     _filter(req)
             except Queue.Empty:
                 time.sleep(0.010)
@@ -294,8 +297,8 @@ def handle_outbound_queue():
         try:
             reply = outbound_messages.get(block=0)
             if reply and hasattr(reply, 'msg') and hasattr(reply, 'addr'):
-                log.debug('server sends %s to %s [%s]' % (
-                    reply.msg_type, repr(reply.addr), repr(reply.body)))
+                log.info('server sends %s to %s' % (
+                    reply.msg_type, repr(reply.addr)))
                 try:
                     data = reply.msg.pack()
                     reactor.callFromThread(servers_pool.send_to,reply.addr, data)
@@ -410,7 +413,7 @@ def login_handler(request):
                 client_public_port=port, ctx_expire=ctx_table[ctx_id].expire - time.time(), 
                 num_of_codecs=len(codecs), codec_list=''.join((c for c in codecs)))
             buf = lr.serialize()
-            log.debug('login reply')
+            log.info('login reply')
             yield CommMessage(request.addr, LoginReply, buf)
         except:
             log.exception('exception')
@@ -473,8 +476,6 @@ class CallSession(object):
                 
             # calle is in another call session
             elif ctx_table[callee_ctx].current_call:
-                #call = ctx_table[callee_ctx].current_call
-                #if call.caller_ctx != callee_ctx and call.callee_ctx != caller_ctx:
                 log.info('client_ctx ', callee_ctx, ' is busy in another call, rejecting invite.')
                 return self._reject(config.Errors.CalleeUnavailable, request)
             
