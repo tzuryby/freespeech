@@ -600,10 +600,11 @@ class CallSession(object):
     def _handle_hangup(self, request, addr):
         buf = request.msg.serialize()
         
-        yield CommMessage(addr, request.msg_type, buf)
-        
         if isinstance(request.msg, HangupRequestAck):
             ctx_table.terminate_call(request.client_ctx, True)
+        
+        yield CommMessage(addr, request.msg_type, buf)
+        
             
     def _handle_rtp(self, request):
         try:

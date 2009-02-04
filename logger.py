@@ -43,7 +43,7 @@ class Logger:
         self.logger.addHandler(self.fh)
         
     def debug(self, *args):
-        self.logger.debug(theme.style_field_name + ''.join(str(i) for i in args) + theme.style_normal)
+        self.logger.debug(theme.style_prompt + ''.join(str(i) for i in args) + theme.style_normal)
 
     def info(self, *args):
         self.logger.info(theme.style_yellow + ''.join(str(i) for i in args) + theme.style_normal)
@@ -52,6 +52,6 @@ class Logger:
         self.logger.exception(theme.style_fail + ''.join(str(i) for i in args) + theme.style_normal)
 
     def warning(self, *args):
-        self.logger.warning(theme.style_class_name + ''.join(str(i) for i in args) + theme.style_normal)
+        self.logger.warning(theme.style_right + ''.join(str(i) for i in args) + theme.style_normal)
 
 log = Logger()
