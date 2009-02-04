@@ -108,10 +108,28 @@ class CtxTable(Storage):
             client = self.get(client_ctx)
             if client:
                 # clear other's party call before removing this party
-                self.terminate_call(client_ctx)
+                self.terminate_call(client_ctx, False)
                 del self[client_ctx]
         
-    def terminate_call(self, client_ctx):
+    def clear_orphan_calls(self):
+        for ctx in self.clients_ctx():
+            call = self[ctx].current_call
+            if call:
+                other_ctx = (call.caller_ctx != ctx and call.caller_ctx) or call.callee_ctx
+                
+                if (# other party not exists
+                    not self.get(other_ctx) 
+                    
+                    # other party or not in call
+                    or not self[other_ctx].current_call
+                    
+                    #other party in call with someone else
+                    or (self[other_ctx].current_call.callee_ctx != ctx 
+                        and self[other_ctx].current_call.caller_ctx != ctx)):
+                    log.warning('ORPHAN CALL REMOVED: CTX ', ctx)
+                    self[ctx].current_call = None
+            
+    def terminate_call(self, client_ctx, per_request=True):
         call = self.client_call(client_ctx)
         if call:
             log.info('hanging up call <%s>' % repr(call.ctx_id))
@@ -120,16 +138,18 @@ class CtxTable(Storage):
                 self[caller_ctx].current_call = None
             if self.get(callee_ctx):
                 self[callee_ctx].current_call = None
+            
+            ctx_table.pprint()
         else:
             log.info('no calls for client <%s>' % repr(client_ctx))
             
     def clients_ctx(self):
         '''all active clients (the keys)'''
-        return self.keys()
+        return self.iterkeys()
             
     def clients(self):
         '''all active clients (the values)'''
-        return self.values()
+        return self.itervalues()
             
     def calls(self):
         '''all active calls'''
@@ -253,20 +273,15 @@ def remove_old_clients():
             for ctx_id in expired_clients:
                 log.info('removing inactive client ' + repr(ctx_id))
                 ctx_table.remove_client(ctx_id)
-            
-            expired_calls = [client.ctx_id for client in ctx_table.clients() 
-                if client.current_call and client.current_call.rtp_expire < now
-            ]
-            for call in expired_calls:
-                log.warning('terminating inactive call at client ' + repr(call))
-                ctx_table.terminate_call(call)
                 
             for i in xrange(CLIENT_EXPIRE):
                 if thread_loop_active:
                     time.sleep(1)
                 else:
                     break
-            
+                    
+            log.info('%d old clients have been removed' % len(expired_clients))
+            ctx_table.clear_orphan_calls()
             ctx_table.pprint()
             
         log.info('terminating thread: remove_old_clients')
@@ -297,8 +312,11 @@ def handle_outbound_queue():
         try:
             reply = outbound_messages.get(block=0)
             if reply and getattr(reply, 'msg') and getattr(reply, 'addr'):
-                log.info('server sends %s to %s' % (
-                    reply.msg_type, repr(reply.addr)))
+                if reply.msg_type != ClientRTP:
+                    log.info('server sends %s to %s' % (reply.msg_type, repr(reply.addr)))
+                else:
+                    log.debug('server sends %s to %s' % (reply.msg_type, repr(reply.addr)))
+                    
                 try:
                     data = reply.msg.pack()
                     reactor.callFromThread(servers_pool.send_to,reply.addr, data)
@@ -319,32 +337,36 @@ def _filter(request):
         msg_type = request.msg_type
         ctx = getattr(msg, 'client_ctx', None) and msg.client_ctx.value
         
+        # login-request, otherwise context must exists in ctx_table
         if not ctx and msg_type != LoginRequest \
-            or (ctx and ctx not in ctx_table.clients_ctx()):
-                
+            or (ctx and ctx not in ctx_table.clients_ctx()):                
             log.warning(
                 'filter is throwing away unknown '
                 'msg_type/client_ctx: %s, %s, %s'
                 %(repr(ctx), repr(msg_type), repr(msg)))
         else:
-            # context exists or login-request
-            if msg_type not in (LoginRequest, Logout):
-                # update (host,port) at ctx_table
-                addr = request.addr
-                if addr != ctx_table[request.client_ctx].addr:
-                    log.warning("Client %s has new address(%s)" % (repr(request.client_ctx), addr))
-                    ctx_table[request.client_ctx].addr = addr
+            
+            addr = request.addr
+            # client is now submitting from a new address
+            if (request.client_ctx in ctx_table 
+                # in ClientRTP the ctx represents teh invited party's ctx
+                and msg_type != messages.ClientRTP
+                and addr != ctx_table[request.client_ctx].addr):
+                log.warning(msg_type)
+                log.warning("Overriding old addr for client %s! old_addr %s, new_addr %s" 
+                    % (request.client_ctx, ctx_table[request.client_ctx].addr, addr))
                 
-            switch = {
-                LoginRequest: login_handler,
-                Logout: logout_handler,
-                KeepAlive: keep_alive_handler 
-            }
-                
-            if msg_type in switch.keys():
-                _out = switch[msg_type](request)
-                
-            elif isinstance(msg, (SignalingMessage, ClientRTP)):
+                ctx_table[request.client_ctx].addr = addr
+            
+            if msg_type == LoginRequest:
+                _out = login_handler(request)
+            elif msg_type == Logout:
+                _out = logout_handler(request)
+            elif msg_type == KeepAlive:
+                _out = keep_alive_handler(request)
+            elif isinstance(msg, SignalingMessage):
+                _out = call_session_handler(request)
+            elif msg_type == ClientRTP:
                 _out = call_session_handler(request)
                 
         if _out:
@@ -352,6 +374,7 @@ def _filter(request):
                 outbound_messages.put(msg)
             if ctx:
                 touch_client(request.client_ctx, request.msg_type)
+                
     except:
         log.exception('exception')
         
@@ -381,13 +404,12 @@ def keep_alive_handler(request):
         #reply with keep-alive-ack
         kaa = KeepAliveAck()
         
-        kaa.set_values(
-            client_ctx=request.client_ctx,
+        kaa.set_values(client_ctx=request.client_ctx,
             expire = expire,
-            refresh_contact_list = 0
-        )
-        
+            refresh_contact_list = 0)
+            
         yield CommMessage(request.addr, KeepAliveAck, kaa.serialize())
+        
     except:
         log.exception('exception')
     
@@ -415,8 +437,8 @@ def login_handler(request):
                 client_public_port=port, ctx_expire=ctx_table[ctx_id].expire - time.time(), 
                 num_of_codecs=len(codecs), codec_list=''.join((c for c in codecs)))
             buf = lr.serialize()
-            log.info('login reply')
             yield CommMessage(request.addr, LoginReply, buf)
+        
         except:
             log.exception('exception')
         
@@ -424,8 +446,7 @@ def login_handler(request):
         try:
             '''returns login-denied reply'''
             ld = ShortResponse()
-            ld.set_values(
-                client_ctx = 0, #('\x00 '*4).split(),
+            ld.set_values(client_ctx = 0, 
                 result = struct.unpack('!h', Errors.LoginFailure))
             buf = ld.serialize()
             log.info('login error')
@@ -443,6 +464,7 @@ def login_handler(request):
             return login_reply(ctx_id, ctx_data)
         else:
             return deny_login()
+            
     except:
         log.exception('exception')
         
@@ -466,6 +488,16 @@ class CallSession(object):
         except:
             log.exception('exception')
             
+    @classmethod
+    def isretransmit(cls, request):        
+        if request.msg_type == ClientInvite:
+            # case a: A invites B. B is already in call sesssion with A
+            caller_ctx = request.msg.client_ctx.value
+            callee_ctx = string_to_ctx(request.msg.calle_name.value)
+            call = ctx_table[callee_ctx].current_call
+            return call and call.callee_ctx == callee_ctx and call.caller_ctx == caller_ctx
+            
+
     def _handle_invite(self, request):
         try:
             caller_ctx = request.msg.client_ctx.value
@@ -477,10 +509,11 @@ class CallSession(object):
                 return self._reject(config.Errors.CalleeNotFound, request)
                 
             # calle is in another call session
-            elif ctx_table[callee_ctx].current_call or callee_ctx == caller_ctx:
-                log.info('client_ctx ', callee_ctx, ' is busy in another call, rejecting invite.')
-                return self._reject(config.Errors.CalleeUnavailable, request)
-            
+            elif ctx_table[callee_ctx].current_call and not CallSession.isretransmit(request):
+                if callee_ctx == caller_ctx:
+                    log.info('client_ctx ', callee_ctx, ' is busy in another call, rejecting invite.')
+                    return self._reject(config.Errors.CalleeUnavailable, request)
+
             #todo: add here `away-status` case handler
             matched_codecs = self._matched_codecs(request.msg.codec_list.value)
             log.debug('matched_codecs: %s' % matched_codecs)
@@ -564,7 +597,7 @@ class CallSession(object):
         yield CommMessage(addr, request.msg_type, buf)
         
         if isinstance(request.msg, HangupRequestAck):
-            ctx_table.terminate_call(request.client_ctx)
+            ctx_table.terminate_call(request.client_ctx, True)
             
     def _handle_rtp(self, request):
         try:
