@@ -120,12 +120,13 @@ class CtxTable(Storage):
                 if (# other party not exists
                     not self.get(other_ctx) 
                     
-                    # other party or not in call
+                    # other party not in call
                     or not self[other_ctx].current_call
                     
                     #other party in call with someone else
                     or (self[other_ctx].current_call.callee_ctx != ctx 
                         and self[other_ctx].current_call.caller_ctx != ctx)):
+                            
                     log.warning('ORPHAN CALL REMOVED: CTX ', ctx)
                     self[ctx].current_call = None
             
@@ -166,8 +167,7 @@ class CtxTable(Storage):
             if call.ctx_id == call_ctx:
                 return call
         return None
-    
-                
+        
     def get_other_addr(self, client_ctx, call_ctx=config.EMPTY_CTX):
         call = None
         if call_ctx != config.EMPTY_CTX:
@@ -184,14 +184,15 @@ class CtxTable(Storage):
                 'client_ctx  <%s>, call_ctx <%s>. '
                 'Might be removed at previous hangup request' 
                 % (repr( client_ctx), repr(call_ctx)))
+            return None
         
     def get_addr(self, client_ctx):
         '''return the last ip address registered for this client'''
-        return client_ctx in self and self[client_ctx].addr
+        return client_ctx in self.clients_ctx() and self[client_ctx].addr
             
     def set_addr(self, client_ctx, (host, port)):
         '''register the last ip address for this client, used for replies'''
-        if client_ctx in self:
+        if client_ctx in self.clients_ctx():
             self[client_ctx].addr = (host, port)
             
     def client_call(self, client_ctx):
@@ -205,7 +206,7 @@ class CtxTable(Storage):
             return call
             
     def pprint(self):
-        log.info('<ContextTable\n%s>' % ppformat (self))
+        log.info('\nContextTable:\n%s>' % ppformat (self))
         
 def recv_msg(caller, (host, port), msg):
     try:
@@ -256,7 +257,7 @@ def create_call_ctx(request):
             start_time = time.time(),
             answer_time = 0,
             end_time = 0,
-            rtp_expire = 0,
+            #rtp_expire = 0,
             codec = None,
             ctx_id = ctx_id
         )
@@ -385,7 +386,7 @@ def touch_client(ctx, msg_type):
             expire = time_stamp + CLIENT_EXPIRE
             ctx_table[ctx].last_keep_alive = time_stamp
             ctx_table[ctx].expire = expire
-            
+            '''
             if ctx_table[ctx].current_call and msg_type == ClientRTP:
                 caller = ctx_table[ctx].current_call.caller_ctx
                 callee = ctx_table[ctx].current_call.callee_ctx
@@ -393,7 +394,7 @@ def touch_client(ctx, msg_type):
                     ctx_table[caller].current_call.rtp_expire = expire
                 if ctx_table[callee].current_call:
                     ctx_table[callee].current_call.rtp_expire = expire
-                
+            '''    
                 
     except:
         log.exception('exception')        
@@ -427,7 +428,7 @@ def login_handler(request):
         except:
             log.exception('exception')
             
-    def login_reply(ctx_id, ctx_data):
+    def reply_login(ctx_id, ctx_data):
         try:
             '''returns a login reply'''
             lr = LoginReply()
@@ -461,7 +462,7 @@ def login_handler(request):
             #creates new client context and register it
             ctx_id, ctx_data = create_client_context(request, status=dbuser.login_status)    
             ctx_table.add_client((ctx_id, ctx_data))
-            return login_reply(ctx_id, ctx_data)
+            return reply_login(ctx_id, ctx_data)
         else:
             return deny_login()
             
@@ -495,7 +496,12 @@ class CallSession(object):
             caller_ctx = request.msg.client_ctx.value
             callee_ctx = string_to_ctx(request.msg.calle_name.value)
             call = ctx_table[callee_ctx].current_call
-            return call and call.callee_ctx == callee_ctx and call.caller_ctx == caller_ctx
+            value = call and call.callee_ctx == callee_ctx and call.caller_ctx == caller_ctx
+            if value:
+                log.info("retransmission recognized", repr(request))
+            return value
+            
+        return False
             
 
     def _handle_invite(self, request):
