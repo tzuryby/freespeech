@@ -18,9 +18,8 @@ __all__ = [
     'IPField',
 ]
 
+import struct
 from logger import log
-
-import struct, traceback
    
 class Field(object):
     def __init__(self, start, format, name=None):
@@ -34,7 +33,6 @@ class Field(object):
     def pack_into(self, buf):
         '''packs the value into a supplied buffer'''
         try:
-            #log.debug(traceback.print_stack())
             struct.pack_into(self.format, buf, self.start, *self._value)
         except Exception, inst:
             log.exception('exception')
@@ -91,8 +89,6 @@ class StringField(Field):
             Field.__init__(self, start, format, name)
         except:
             log.exception('exception')
-            #print 'error@StringField.__init__\nstart %s, format %s, name %s' % (
-            #    start, format, name)
             
     def __setattr__(self, k, v):
         try:
@@ -112,7 +108,8 @@ class StringField(Field):
             return self._value[0:]
         else:
             raise AttributeError
-            
+
+# Not in use anymore. context fields are 32 bit integers
 class UUIDField(StringField):
     '''16 bytes uniqueue_id'''
     def __init__(self, start, name=None):

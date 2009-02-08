@@ -26,7 +26,7 @@ def run_all():
         
 def stop_all(*args):
     #stop the reactor
-    log.info( 'termination process started... terminating reactor\'s mainloop')
+    log.info("termination process started... terminating reactor's mainloop")
     reactor.stop()
     #stop flag for threads at session module (started at run_all() function above)
     session.thread_loop_active = False

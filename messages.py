@@ -55,22 +55,23 @@ def string_to_ctx(*args):
 
 class Parser(object):
     def __init__(self):
-        self.framer = MessageFramer()
+        pass
+        #self.framer = MessageFramer()
         
     def parse_type(self, msg):
         '''parses the type (bytes of typecode)'''
-        t = msg[self.framer.TYPE_POS[0]:self.framer.TYPE_POS[1]]
+        t = msg[MessageFramer.TYPE_POS[0]:MessageFramer.TYPE_POS[1]]
         return t in MessageTypes and t
         
     def bof(self, msg):
-        return self.framer.BOF == msg[:self.framer.BOF_LEN]
+        return MessageFramer.BOF == msg[:MessageFramer.BOF_LEN]
         
     def eof(self, msg):
-        return self.framer.EOF == msg[-self.framer.EOF_LEN:]
+        return MessageFramer.EOF == msg[-MessageFramer.EOF_LEN:]
 
     def length(self, msg):
         try:
-            return struct.unpack('!h', msg[self.framer.LEN_POS[0]:self.framer.LEN_POS[1]])[0]
+            return struct.unpack('!h', msg[MessageFramer.LEN_POS[0]:MessageFramer.LEN_POS[1]])[0]
         except:
             return -1
         
@@ -82,7 +83,7 @@ class Parser(object):
         
     def _body(self, msg):
         buf = create_string_buffer(self.length(msg))
-        buf.raw = msg[self.framer.LEN_POS[1] : -self.framer.EOF_LEN]
+        buf.raw = msg[MessageFramer.LEN_POS[1] : -MessageFramer.EOF_LEN]
         return buf
         
     def body(self, msg):
@@ -97,11 +98,12 @@ class MessageFramer(object):
     TYPE_POS, LEN_POS = (2,4) , (4, 6)
     BOF_LEN, EOF_LEN = len(BOF), len(EOF)
     
-    def frame(self, type_code, buf):
+    @staticmethod
+    def frame(type_code, buf):
         length = struct.pack('!h', len(buf))
-        return ''.join([self.BOF, type_code, length, buf, self.EOF])
+        return ''.join([MessageFramer.BOF, type_code, length, buf, MessageFramer.EOF])
         
-message_framer = MessageFramer()
+#message_framer = MessageFramer()
 
 class CommMessage(object):
     '''Wrapps message with additional data.
@@ -245,7 +247,7 @@ class BaseMessage(object):
     def pack(self):
         try:
             '''packs the buffer and make it ready to ship'''
-            return message_framer.frame(self.type_code, self.serialize())
+            return MessageFramer.frame(self.type_code, self.serialize())
         except:
             log.exception('exception')
             

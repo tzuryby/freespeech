@@ -16,7 +16,7 @@ RTP_EXPIRE = 20
 
 EMPTY_CTX = (0,) #'\x00'*16
 
-Codecs = Storage(
+Codecs = Storage (
     PCMA='\x01', 
     PCMU='\x02', 
     G723='\x03', 
@@ -30,7 +30,7 @@ CallTypes = Storage (
     Direct=2,
 )
 
-Errors = Storage(
+Errors = Storage (
     #general
     Unknown = '\xff\x00',
     UknownClient = '\xff\x01',
@@ -48,7 +48,7 @@ Errors = Storage(
     CodecMismatch = '\x03\x03'
 )
 
-ClientStatus = Storage(
+ClientStatus = Storage (
     Unknown = '\xff',
     Active = '\x00',
     Busy = '\x01',

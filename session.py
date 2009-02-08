@@ -7,11 +7,10 @@ __author__ = 'Tzury Bar Yochay'
 __version__ = '0.1'
 __license__ = 'GPLv3'
 
-import time, Queue, struct, uuid 
-import threading, sys, traceback
-import dblayer, messages, config
+import time, Queue, struct, uuid, threading, sys, traceback
 
 from twisted.internet import reactor
+import dblayer, messages, config
 
 from messages import *
 from messagefields import *
@@ -118,13 +117,13 @@ class CtxTable(Storage):
                 other_ctx = (call.caller_ctx != ctx and call.caller_ctx) or call.callee_ctx
                 
                 if (# other party not exists
-                    not self.get(other_ctx) 
+                    not self.get(other_ctx)
                     
                     # other party not in call
                     or not self[other_ctx].current_call
                     
                     #other party in call with someone else
-                    or (self[other_ctx].current_call.callee_ctx != ctx 
+                    or (self[other_ctx].current_call.callee_ctx != ctx
                         and self[other_ctx].current_call.caller_ctx != ctx)):
                             
                     log.warning('ORPHAN CALL REMOVED: CTX ', ctx)
@@ -489,8 +488,8 @@ class CallSession(object):
         except:
             log.exception('exception')
             
-    @classmethod
-    def isretransmit(cls, request):        
+    @staticmethod
+    def isretransmit(request):        
         if request.msg_type == ClientInvite:
             # case a: A invites B. B is already in call sesssion with A
             caller_ctx = request.msg.client_ctx.value
