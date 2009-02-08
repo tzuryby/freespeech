@@ -17,7 +17,7 @@ __license__ = 'GPLv3'
 
 __all__ = [
     'Parser', 
-    'MessageFramer', 
+    'Framer', 
     'BaseMessage', 
     'HangupRequest', 
     'HangupRequestAck', 
@@ -39,7 +39,7 @@ __all__ = [
     'ShortResponse', 
     'MessageTypes', 
     'string_to_ctx',
-]
+    ]
     
 import struct
 from ctypes import create_string_buffer
@@ -56,22 +56,21 @@ def string_to_ctx(*args):
 class Parser(object):
     def __init__(self):
         pass
-        #self.framer = MessageFramer()
         
     def parse_type(self, msg):
         '''parses the type (bytes of typecode)'''
-        t = msg[MessageFramer.TYPE_POS[0]:MessageFramer.TYPE_POS[1]]
+        t = msg[Framer.TYPE_POS[0]:Framer.TYPE_POS[1]]
         return t in MessageTypes and t
         
     def bof(self, msg):
-        return MessageFramer.BOF == msg[:MessageFramer.BOF_LEN]
+        return Framer.BOF == msg[:Framer.BOF_LEN]
         
     def eof(self, msg):
-        return MessageFramer.EOF == msg[-MessageFramer.EOF_LEN:]
+        return Framer.EOF == msg[-Framer.EOF_LEN:]
 
     def length(self, msg):
         try:
-            return struct.unpack('!h', msg[MessageFramer.LEN_POS[0]:MessageFramer.LEN_POS[1]])[0]
+            return struct.unpack('!h', msg[Framer.LEN_POS[0]:Framer.LEN_POS[1]])[0]
         except:
             return -1
         
@@ -83,7 +82,7 @@ class Parser(object):
         
     def _body(self, msg):
         buf = create_string_buffer(self.length(msg))
-        buf.raw = msg[MessageFramer.LEN_POS[1] : -MessageFramer.EOF_LEN]
+        buf.raw = msg[Framer.LEN_POS[1] : -Framer.EOF_LEN]
         return buf
         
     def body(self, msg):
@@ -93,7 +92,7 @@ class Parser(object):
         else:
             return None
 
-class MessageFramer(object):
+class Framer(object):
     BOF, EOF = '\xab\xcd', '\xdc\xba'
     TYPE_POS, LEN_POS = (2,4) , (4, 6)
     BOF_LEN, EOF_LEN = len(BOF), len(EOF)
@@ -101,10 +100,8 @@ class MessageFramer(object):
     @staticmethod
     def frame(type_code, buf):
         length = struct.pack('!h', len(buf))
-        return ''.join([MessageFramer.BOF, type_code, length, buf, MessageFramer.EOF])
+        return ''.join([Framer.BOF, type_code, length, buf, Framer.EOF])
         
-#message_framer = MessageFramer()
-
 class CommMessage(object):
     '''Wrapps message with additional data.
     Encapsulates the address, the type of the message(Class) 
@@ -247,7 +244,7 @@ class BaseMessage(object):
     def pack(self):
         try:
             '''packs the buffer and make it ready to ship'''
-            return MessageFramer.frame(self.type_code, self.serialize())
+            return Framer.frame(self.type_code, self.serialize())
         except:
             log.exception('exception')
             

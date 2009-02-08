@@ -17,7 +17,7 @@ from messagefields import *
 from utils import Storage
 from config import *
 from decorators import printargs
-from logger import log
+from logger import log, cdr_logger
 from pprint import PrettyPrinter
 
 ppformat = PrettyPrinter().pformat
@@ -128,11 +128,22 @@ class CtxTable(Storage):
                             
                     log.warning('ORPHAN CALL REMOVED: CTX ', ctx)
                     self[ctx].current_call = None
-            
+        
+    def mark_answer(self, client_ctx):
+        call = self.client_call(client_ctx)
+        if call:
+            caller_ctx, callee_ctx = call.caller_ctx, call.callee_ctx
+            if self.get(caller_ctx):
+                self[caller_ctx].current_call.answer_time = time.time()
+            if self.get(callee_ctx):
+                self[callee_ctx].current_call.answer_time = time.time()
+                
     def terminate_call(self, client_ctx, per_request=True):
         call = self.client_call(client_ctx)
         if call:
             log.info('hanging up call <%s>' % repr(call.ctx_id))
+            call.end_time = time.time()
+            cdr_logger.writeline(call)
             caller_ctx, callee_ctx = call.caller_ctx, call.callee_ctx
             if self.get(caller_ctx):
                 self[caller_ctx].current_call = None
@@ -501,8 +512,7 @@ class CallSession(object):
             return value
             
         return False
-            
-
+        
     def _handle_invite(self, request):
         try:
             caller_ctx = request.msg.client_ctx.value
@@ -584,6 +594,7 @@ class CallSession(object):
                 if isinstance(msg, ClientInviteAck):                
                     return self._forward_invite_ack(msg, other_addr)
                 elif isinstance(msg, ClientAnswer):
+                    ctx_table.mark_answer(client_ctx)
                     return self._forward_client_answer(msg, other_addr)
                 elif isinstance(msg, (HangupRequest, HangupRequestAck)):
                     return self._handle_hangup(request, other_addr)
