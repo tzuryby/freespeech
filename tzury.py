@@ -5,6 +5,7 @@ from __future__ import with_statement
 from snoipclient import SnoipClient
 import time
 
+
 # init a client at snoip port
 sc = SnoipClient(('0.0.0.0', 50009))
 

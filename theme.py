@@ -1,8 +1,7 @@
-#
+
 # The color mechanism is taken from Scapy:
 # http://www.secdev.org/projects/scapy/
 # Thanks to Philippe Biondi for his awesome tool and design.
-#
 
 class Color:
     normal = "\033[0m"
