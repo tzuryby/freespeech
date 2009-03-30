@@ -8,6 +8,7 @@ __license__ = 'GPLv3'
 
 
 import re
+import config
 from db import db
 from utils import Storage
 from logger import log
@@ -18,7 +19,7 @@ __all__ = [
 
 def users():
     users = Storage()
-    for row in db.select('select * from users'):
+    for row in db.select('select * from users limit %d' % (config.NUM_OF_USERS)):
         users[row.username] = row
     return users
     

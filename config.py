@@ -17,6 +17,9 @@ RTP_EXPIRE = 20
 
 EMPTY_CTX = (0,) #'\x00'*16
 
+NUM_OF_USERS = license.NUM_OF_USERS
+CONCURRENT_SESSIONS = license.CONCURRENT_SESSIONS
+
 Codecs = Storage (
     PCMA='\x01', 
     PCMU='\x02', 
