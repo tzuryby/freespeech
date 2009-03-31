@@ -6,7 +6,7 @@ __author__ = 'Tzury Bar Yochay'
 __version__ = '0.1'
 __license__ = 'GPLv3'
 
-
+import license
 from utils import Storage
 from logger import log
 
