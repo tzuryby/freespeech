@@ -11,15 +11,18 @@ import sys, threading, time
 import logging, cPickle, exceptions
 from threading import Thread
 
-from twisted.internet.protocol import Protocol, DatagramProtocol, ServerFactory
+from twisted.internet.protocol import Protocol, DatagramProtocol, Factory, ServerFactory
 from twisted.internet import reactor
 
 import session
 from utils import Storage
 from logger import log
 
-        
-class TCPServer(Protocol):
+from logging import makeLogRecord, getLogger
+from logging.config import fileConfig
+from logging.handlers import DEFAULT_TCP_LOGGING_PORT
+
+class TCPServerPrtocol(Protocol):
     dataReceivedHandler = session.recv_msg
         
     def connectionMade(self):
@@ -38,14 +41,21 @@ class TCPServer(Protocol):
         log.info('connection Lost')
         self.factory.echoers.remove(self)
         
-    
+        
 class TCPServerFactory(ServerFactory):
-    protocol = TCPServer
+    protocol = TCPServerPrtocol
     echoers = []
         
+    def _broadcast(self, clients, data):
+        for client in clients:
+            client.transport.write(data)
+            
+    def send_others(self, (host, port), data):
+        self._broadcast([echo for echo in self.echoers 
+            if echo.transport.client != (host, port)], data)
+        
     def send_all(self, data):
-        for e in self.echoers:
-            e.transport.write(data)
+        self._broadcast(self.echoers, data)
             
     def send_to(self, (host, port), data):
         for e in self.echoers:
@@ -84,26 +94,10 @@ class UDPServer(DatagramProtocol):
         return (host, port) in self.echoers
         
 
-class BroadcastServer(TCPServer):
-    def dataReceived(self, data):
-        self.factory.send_all(data)
-
-class BroadcastLoggingServer(BroadcastServer):
-    def dataReceived(self, data):
-        try:
-            data = cPickle.loads(data)
-        except exceptions.EOFError:
-            pass
-        data = logging.makeLogRecord(data)
-        BroadcastServer.dataReceived(data)
-        
-start_tcp = TCPServerFactory
-start_udp = UDPServer
-
 def serve(listeners):
     starters = {
-        'tcp': start_tcp,
-        'udp': start_udp }
+        'tcp': TCPServerFactory,
+        'udp': UDPServer }
     
     reactor_listen = {
         'tcp': reactor.listenTCP,
@@ -115,9 +109,6 @@ def serve(listeners):
         session.servers_pool.add(proto, starter)
         log.info( 'serving %s on port %s' % (proto, port))
         
-    #broadcast = TCPServerFactory()
-    #broadcast.protocol = BroadcastLoggingServer
-    #reactor.listenTCP(9020,broadcast)
-        
+    #~ reactor.listenTCP(logging.DEFAULT_TCP_LOGGING_PORT, BroadcastFactory())
     reactor.run(installSignalHandlers=0)
     
