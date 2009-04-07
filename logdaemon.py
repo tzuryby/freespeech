@@ -29,9 +29,8 @@ class LoggingProtocol(Protocol):
 
     def connectionMade(self):
         client_host = self.transport.client[0]
-        print client_host
         
-        if client_host in allow_clients or client_host.statswith(lan):
+        if client_host in allow_clients or client_host.startswith(lan):
             print 'adding client', client_host
             self.factory.echoers.append(self)
         else:
