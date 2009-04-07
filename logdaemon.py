@@ -59,8 +59,8 @@ class LoggingFactory(Factory):
             target.transport.write(data)
             
     def send_others(self, (host, port), data):
-        self._broadcast([echo for echo in self.echoers 
-            if echo.transport.client != (host, port)], data)
+        self._broadcast((echo for echo in self.echoers 
+            if echo.transport.client != (host, port)), data)
         
     def send_all(self, data):
         self._broadcast(self.echoers, dir(data))
@@ -93,6 +93,8 @@ if __name__ == '__main__':
             snoip_log_daemon.stop()
         elif 'restart' == sys.argv[1]:
             snoip_log_daemon.restart()
+        elif 'fg' == sys.argv[1]:
+            startLogging()
         else:
             print "Unknown command"
             sys.exit(2)
