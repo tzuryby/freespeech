@@ -19,13 +19,17 @@ from twisted.internet.protocol import Protocol, Factory
 from daemon import Daemon
 from twisted.internet import reactor
 
+allow_clients = ['localhost', '127.0.0.1', ]
+lan = '10.0.0.'
+
 class LoggingProtocol(Protocol):
     def __init__(self):
         self.data = "" # definitely must be bytes, not unicode
         self.slen = None
 
     def connectionMade(self):
-        if self.transport.client[0] in ('localhost', '127.0.0.1', ''):
+        client_host = self.transport.client[0]
+        if client_host in allow_clients or client_host.statswith(lan):
             self.factory.echoers.append(self)
             
     def dataReceived(self, data):
@@ -61,31 +65,38 @@ class LoggingFactory(Factory):
     def send_all(self, data):
         self._broadcast(self.echoers, dir(data))
 
+def startLogging():
+    listener = reactor.listenTCP(DEFAULT_TCP_LOGGING_PORT, LoggingFactory())
+    allow_clients.append(listener.getHost().host)
+    print allow_clients
+    reactor.run(installSignalHandlers=0)
+    
+def stopLogging():
+    if not reactor._stopped:
+        reactor.stop()
 
 class SnoipDaemon(Daemon):
     def run(self):
-        reactor.listenTCP(DEFAULT_TCP_LOGGING_PORT, LoggingFactory())
-        reactor.run(installSignalHandlers=0)
+        startLogging()
+        
     def stop(self):
-        if not reactor._stopped:
-            reactor.stop()
-            
+        stopLogging()
         Daemon.stop(self)
 
 snoip_log_daemon = SnoipDaemon('/tmp/snoip_log_daemon.pid')
 
 if __name__ == '__main__':
-	if len(sys.argv) == 2:
-		if 'start' == sys.argv[1]:
-			snoip_log_daemon.start()
-		elif 'stop' == sys.argv[1]:
-			snoip_log_daemon.stop()
-		elif 'restart' == sys.argv[1]:
-			snoip_log_daemon.restart()
-		else:
-			print "Unknown command"
-			sys.exit(2)
-		sys.exit(0)
-	else:
-		print "usage: %s start|stop|restart" % sys.argv[0]
-		sys.exit(2)
+    if len(sys.argv) == 2:
+        if 'start' == sys.argv[1]:
+            snoip_log_daemon.start()
+        elif 'stop' == sys.argv[1]:
+            snoip_log_daemon.stop()
+        elif 'restart' == sys.argv[1]:
+            snoip_log_daemon.restart()
+        else:
+            print "Unknown command"
+            sys.exit(2)
+        sys.exit(0)
+    else:
+        print "usage: %s start|stop|restart" % sys.argv[0]
+        sys.exit(2)
