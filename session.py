@@ -101,7 +101,7 @@ class ServersPool(Storage):
 class CtxTable(Storage):
     def add_client(self, (client_ctx, data)):
         with rlock():
-            if len(self.keys()) < CONCURRENT_SESSIONS:
+            if len(self.keys()) < NUM_OF_USERS:
                 self[client_ctx] = data
             
     def remove_client(self, client_ctx):

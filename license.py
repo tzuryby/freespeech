@@ -12,4 +12,7 @@ def _verify(cypher):
     return rsa.verify(cypher, public_key)
 
 NUM_OF_USERS = int(_verify(a))
+
+# CONCURRENT_SESSIONS is not in use. 
+# Only NUM_OF_USERS since max of current sessions will be NUM_OF_USERS / 2
 CONCURRENT_SESSIONS = int(_verify(b))
