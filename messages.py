@@ -38,14 +38,15 @@ __all__ = [
     ]
     
 import struct
-from ctypes import create_string_buffer
+from ctypes import create_string_buffer, c_int
 from utils import Storage
 from logger import log
 from messagefields import *
 
 def string_to_ctx(*args):
     v = ''.join((str(arg) for arg in args))
-    h = hash(v)
+    # ensure we use 32 bit integer on 64 bit CPU
+    h = c_int(hash(v)).value
     log.debug('hashing %s as %d' % (repr(v), h))
     return h
 
