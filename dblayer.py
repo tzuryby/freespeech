@@ -19,7 +19,8 @@ __all__ = [
 
 def users():
     users = Storage()
-    for row in db.select('select * from users limit %d' % (config.NUM_OF_USERS)):
+    for row in db.select(
+        'select * from users limit %d' % (config.NUM_OF_USERS)):
         users[row.username] = row
     return users
     

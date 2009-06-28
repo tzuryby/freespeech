@@ -45,10 +45,11 @@ class SnoipDaemon(Daemon):
     def stop_all(self, *args):
         #stop the reactor
         if not reactor._stopped:
-            log.info("termination process started... terminating reactor's mainloop")
+            log.info("termination process started... "
+                "terminating reactor's mainloop")
             reactor.stop()
         
-        #stop flag for threads at session module (started at run_all() function above)
+        #stop flag for threads at session module started at run_all() function
         session.thread_loop_active = False
     
     def run(self):
@@ -116,7 +117,9 @@ class LoggingFactory(Factory):
 
 class LogDaemon(Daemon):
     def startLogging(self):
-        listener = reactor.listenTCP(DEFAULT_TCP_LOGGING_PORT, LoggingFactory())
+        listener = reactor.listenTCP(
+            DEFAULT_TCP_LOGGING_PORT, LoggingFactory())
+            
         allow_clients.append(listener.getHost().host)
         print allow_clients
         reactor.run(installSignalHandlers=0)

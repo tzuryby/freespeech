@@ -11,7 +11,9 @@ import sys, threading, time
 import logging, cPickle, exceptions
 from threading import Thread
 
-from twisted.internet.protocol import Protocol, DatagramProtocol, Factory, ServerFactory
+from twisted.internet.protocol import (
+    Protocol, DatagramProtocol, Factory, ServerFactory
+    )
 from twisted.internet import reactor
 
 import session

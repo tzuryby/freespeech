@@ -21,8 +21,8 @@ def printargs(fn, *args, **kwargs):
     
 if __name__ == '__main__':
     @printargs
-    def bar(a,b,c):
-        print 'Hello'
+    def bar(a,b,c, hello='World'):
+        print 'Hello ' + hello
         
-    bar(1,2,3, hello='world')
+    bar(1,2,3)
     

@@ -82,8 +82,13 @@ class DB(object):
         
     def update(self, table, **kwargs):        
         _update = 'UPDATE %s ' % table
-        _set = ' SET ' + ', '.join([k + '=' + self.sqlquote(v) for k,v in kwargs.iteritems() if k != 'where'])
+        _set = ' SET ' + ', '.join([
+            k + '=' + self.sqlquote(v) 
+            for k,v in kwargs.iteritems() 
+            if k != 'where'])
+                
         _where = ('where' in kwargs and ' WHERE %s ' % kwargs['where']) or ''
+        
         self.execute(_update + _set + _where)
         
 db = DB()

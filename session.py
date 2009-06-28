@@ -67,7 +67,8 @@ class Packer(object):
                     # save the incoming msg
                     self.clients[client] = msg
                 else:
-                    log.info('unknown message from an unknown client (ignored)')
+                    log.info(
+                        'unknown message from an unknown client (ignored)')
             else:
                 # concatenate the incoming message to previous packets
                 self.clients[client] = self.clients[client] + msg
@@ -83,12 +84,15 @@ class ServersPool(Storage):
                 listener.server.send_to((host, port), data)
                 return
             else:
-                log.info("Unknown address %s:%s at ServerPool.send_to" % (host, port))
+                log.info("Unknown address %s:%s at ServerPool.send_to" 
+                    % (host, port))
         else:
-            log.info("Invalid args (%s,%s,%s) at ServerPool.send_to" % (host, port, repr(data)))
+            log.info("Invalid args (%s,%s,%s) at ServerPool.send_to" 
+                % (host, port, repr(data)))
             
     def known_address(self, (host, port)):
-        '''returns true if found a server which is connected to the client at the specified address'''
+        '''returns true if found a server which is connected to the client 
+        at the specified address'''
         for id, listener in self.iteritems():
             if listener.server.connected_to((host, port)):
                 return listener
@@ -116,7 +120,8 @@ class CtxTable(Storage):
         for ctx in self.clients_ctx():
             call = self[ctx].current_call
             if call:
-                other_ctx = (call.caller_ctx != ctx and call.caller_ctx) or call.callee_ctx
+                other_ctx = (call.caller_ctx != ctx and call.caller_ctx) \
+                    or call.callee_ctx
                 
                 if (# other party not exists
                     not self.get(other_ctx)
@@ -213,7 +218,8 @@ class CtxTable(Storage):
             call = self[client_ctx].current_call
             if not call:
                 for call in self.calls():
-                    if call.caller_ctx == client_ctx or call.callee_ctx == client_ctx:
+                    if (call.caller_ctx == client_ctx 
+                        or call.callee_ctx == client_ctx):
                         return call
             return call
             
@@ -258,7 +264,8 @@ def create_call_ctx(request):
         '''creates the call context for each valid invite
         returns a tuple(ctx_id, call_ctx_data)
         call_ctx_data.keys() =>
-            caller_ctx, callee_ctx, start_time, answer_time, end_time, codec, proto, ctx_id
+            caller_ctx, callee_ctx, start_time, answer_time, 
+            end_time, codec, proto, ctx_id
         '''
         caller_ctx = request.msg.client_ctx.value
         callee_ctx = string_to_ctx(request.msg.calle_name.value)
@@ -281,7 +288,10 @@ def remove_old_clients():
     try:
         while thread_loop_active:
             now = time.time()
-            expired_clients = [client.ctx_id for client in ctx_table.clients() if client.expire < now]
+            expired_clients = [client.ctx_id 
+                for client 
+                    in ctx_table.clients() 
+                        if client.expire < now]
             
             for ctx_id in expired_clients:
                 log.info('removing inactive client ' + repr(ctx_id))
@@ -308,9 +318,11 @@ def handle_inbound_queue():
                 req = inbound_messages.get(block=0)
                 if req:
                     if req.msg_type != ClientRTP:
-                        log.info('server received %s to %s' % (req.msg_type, repr(req.addr)))
+                        log.info('server received %s to %s' 
+                            % (req.msg_type, repr(req.addr)))
                     else:
-                        log.debug('server received %s to %s' % (req.msg_type, repr(req.addr)))
+                        log.debug('server received %s to %s' 
+                            % (req.msg_type, repr(req.addr)))
                         
                     _filter(req)
             except Queue.Empty:
@@ -326,13 +338,17 @@ def handle_outbound_queue():
             reply = outbound_messages.get(block=0)
             if reply and getattr(reply, 'msg') and getattr(reply, 'addr'):
                 if reply.msg_type != ClientRTP:
-                    log.info('server sends %s to %s' % (reply.msg_type, repr(reply.addr)))
+                    log.info('server sends %s to %s' 
+                        % (reply.msg_type, repr(reply.addr)))
                 else:
-                    log.debug('server sends %s to %s' % (reply.msg_type, repr(reply.addr)))
+                    log.debug('server sends %s to %s' 
+                        % (reply.msg_type, repr(reply.addr)))
                     
                 try:
                     data = reply.msg.pack()
-                    reactor.callFromThread(servers_pool.send_to,reply.addr, data)
+                    reactor.callFromThread(
+                        servers_pool.send_to,reply.addr, data)
+                        
                 except Exception, inst:
                     log.exception('exception')
                     
@@ -366,8 +382,10 @@ def _filter(request):
                 and msg_type != messages.ClientRTP
                 and addr != ctx_table[request.client_ctx].addr):
                 log.warning(msg_type)
-                log.warning("Overriding old addr for client %s! old_addr %s, new_addr %s" 
-                    % (request.client_ctx, ctx_table[request.client_ctx].addr, addr))
+                log.warning("Overriding old addr for client %s!"
+                    " old_addr %s, new_addr %s" 
+                    % (request.client_ctx, 
+                        ctx_table[request.client_ctx].addr, addr))
                 
                 ctx_table[request.client_ctx].addr = addr
             
@@ -447,8 +465,10 @@ def login_handler(request):
             ip, port = ctx_data.addr
             codecs = sorted(Codecs.values())
             lr.set_values(client_ctx=ctx_id, client_public_ip=ip , 
-                client_public_port=port, ctx_expire=ctx_table[ctx_id].expire - time.time(), 
-                num_of_codecs=len(codecs), codec_list=''.join((c for c in codecs)))
+                client_public_port=port, 
+                ctx_expire=ctx_table[ctx_id].expire - time.time(), 
+                num_of_codecs=len(codecs), 
+                codec_list=''.join((c for c in codecs)))
             buf = lr.serialize()
             yield CommMessage(request.addr, LoginReply, buf)
         
@@ -468,11 +488,15 @@ def login_handler(request):
             log.exception('exception')
         
     try:
-        username, password = request.msg.username.value, request.msg.password.value
+        username, password = (request.msg.username.value, 
+            request.msg.password.value)
+            
         dbuser = verify_login(username, password)
         if dbuser:
             #creates new client context and register it
-            ctx_id, ctx_data = create_client_context(request, status=dbuser.login_status)    
+            ctx_id, ctx_data = create_client_context(
+                request, status=dbuser.login_status)
+                
             ctx_table.add_client((ctx_id, ctx_data))
             return reply_login(ctx_id, ctx_data)
         else:
@@ -508,7 +532,9 @@ class CallSession(object):
             caller_ctx = request.msg.client_ctx.value
             callee_ctx = string_to_ctx(request.msg.calle_name.value)
             call = ctx_table[callee_ctx].current_call
-            value = call and call.callee_ctx == callee_ctx and call.caller_ctx == caller_ctx
+            value = (call 
+                and call.callee_ctx == callee_ctx 
+                and call.caller_ctx == caller_ctx)
             if value:
                 log.info("retransmission recognized", repr(request))
             return value
@@ -522,14 +548,18 @@ class CallSession(object):
             
             # calle is not logged in
             if callee_ctx not in ctx_table:
-                log.info('client_ctx ', callee_ctx, ' does not exist, rejecting invite.')
+                log.info('client_ctx ', callee_ctx, 
+                    ' does not exist, rejecting invite.')
                 return self._reject(config.Errors.CalleeNotFound, request)
                 
             # calle is in another call session
-            elif ctx_table[callee_ctx].current_call and not CallSession.isretransmit(request):
+            elif (ctx_table[callee_ctx].current_call 
+                    and not CallSession.isretransmit(request)):
                 if callee_ctx == caller_ctx:
-                    log.info('client_ctx ', callee_ctx, ' is busy in another call, rejecting invite.')
-                    return self._reject(config.Errors.CalleeUnavailable, request)
+                    log.info('client_ctx ', callee_ctx, 
+                        ' is busy in another call, rejecting invite.')
+                    return self._reject(config.Errors.CalleeUnavailable, 
+                        request)
 
             #todo: add here `away-status` case handler
             matched_codecs = self._matched_codecs(request.msg.codec_list.value)
@@ -571,16 +601,22 @@ class CallSession(object):
             )
             
             sfi_buffer = sfi.serialize()
-            yield CommMessage(ctx_table.get_addr(callee_ctx), ServerForwardInvite, sfi_buffer)
+            yield CommMessage(ctx_table.get_addr(callee_ctx), 
+                ServerForwardInvite, sfi_buffer)
         except:
             log.exception('exception')
         
     def _matched_codecs(self, client_codecs):
         try:
-            '''returns either `0` or a list of matched codecs between the client and the server'''
+            '''returns either `0` or a list of matched codecs 
+            between the client and the server'''
             server_codecs = config.Codecs.values()
             # inefficient algorithm
-            matched_codecs = [codec for codec in client_codecs if codec in server_codecs]
+            matched_codecs = [codec 
+                for codec 
+                    in client_codecs 
+                    if codec in server_codecs]
+                        
             return len(matched_codecs) and matched_codecs
         except:
             log.exception('exception')
@@ -603,7 +639,8 @@ class CallSession(object):
             elif isinstance(msg, (HangupRequest)):
                 return self._handle_hangup(request, other_addr)
             else:
-                log.warning('_handle_signaling: call is out of context %s' % repr(call_ctx))
+                log.warning('_handle_signaling: call is out of context %s' 
+                    % repr(call_ctx))
                 ctx_table.pprint()
                 
         except:
@@ -622,18 +659,21 @@ class CallSession(object):
         try:
             call = ctx_table.find_call(request.call_ctx)
             if call:
-                other_addr = ctx_table.get_other_addr(request.client_ctx, request.call_ctx)
+                other_addr = ctx_table.get_other_addr(request.client_ctx, 
+                    request.call_ctx)
                 buf = request.msg.serialize()
                 yield CommMessage(other_addr, ClientRTP, buf)
             else:
-                log.warning('%s _handle_rtp: call is out of context %s' % (repr(self) ,repr(call)))
+                log.warning('%s _handle_rtp: call is out of context %s' 
+                    % (repr(self) ,repr(call)))
                 ctx_table.pprint()
         except:
             log.exception('exception')
             
     def _reject(self, reason, request):
         try:
-            log.info('server reject invite CTX:%s, Reason: %s' % (repr(request.client_ctx), repr(reason)))
+            log.info('server reject invite CTX:%s, Reason: %s' 
+                % (repr(request.client_ctx), repr(reason)))
             ctx = request.client_ctx
             sri = ServerRejectInvite()
             result = ShortField(0)

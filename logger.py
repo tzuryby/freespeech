@@ -39,7 +39,7 @@ class Logger:
         self.ch = logging.StreamHandler()
         
         # socket handler
-        self.sh = handlers.SocketHandler('localhost', handlers.DEFAULT_TCP_LOGGING_PORT)
+        #self.sh = handlers.SocketHandler('localhost', handlers.DEFAULT_TCP_LOGGING_PORT)
         
         self.ch.setFormatter(self.stream_frmt)
         self.fh.setFormatter(self.file_frmt)
@@ -49,21 +49,34 @@ class Logger:
         self.logger.addHandler(self.sh)
         
     def debug(self, *args):
-        self.logger.debug(theme.style_prompt + ''.join(str(i) for i in args) + theme.style_normal)
+        self.logger.debug(
+            theme.style_prompt 
+            + ''.join(str(i) for i in args) 
+            + theme.style_normal)
 
     def info(self, *args):
-        self.logger.info(theme.style_yellow + ''.join(str(i) for i in args) + theme.style_normal)
+        self.logger.info(
+            theme.style_yellow 
+            + ''.join(str(i) for i in args) 
+            + theme.style_normal)
 
     def exception(self, *args):
-        self.logger.exception(theme.style_fail + ''.join(str(i) for i in args) + theme.style_normal)
+        self.logger.exception(
+            theme.style_fail 
+            + ''.join(str(i) for i in args) 
+            + theme.style_normal)
 
     def warning(self, *args):
-        self.logger.warning(theme.style_right + ''.join(str(i) for i in args) + theme.style_normal)
+        self.logger.warning(
+            theme.style_right 
+            + ''.join(str(i) for i in args) 
+            + theme.style_normal)
 
 class CDRLogger:
     def __init__(self):
         self.file_frmt = logging.Formatter('%(asctime)s,%(message)s')
-        self.file_handler = logging.handlers.TimedRotatingFileHandler('cdr.log', 'D')
+        self.file_handler = \
+            logging.handlers.TimedRotatingFileHandler('cdr.log', 'D')
         self.file_handler.setFormatter(self.file_frmt)
         
         self.logger = logging.getLogger('snoip.freespeech.cdr')
@@ -71,7 +84,10 @@ class CDRLogger:
         self.logger.addHandler(self.file_handler)
         
     def writeline(self, rec):
-        record = ','.join(map(str, (rec.caller_ctx, rec.callee_ctx, rec.start_time, rec.answer_time, rec.end_time)))
+        record = ','.join(
+            map(str, (rec.caller_ctx, rec.callee_ctx, rec.start_time, 
+                rec.answer_time, rec.end_time)))
+                
         self.logger.debug(record)
          
 log = Logger()

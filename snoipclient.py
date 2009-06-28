@@ -19,7 +19,8 @@ class UdpClient(Thread):
     def __init__(self, (host, port), recv_callback = None):
         Thread.__init__(self)
         self.host, self.port= host, port
-        self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+        self.socket = socket.socket(socket.AF_INET, 
+            socket.SOCK_DGRAM, socket.IPPROTO_UDP)
         self.recv_callback = recv_callback
         
     def send(self, msg):
@@ -78,7 +79,6 @@ class SnoipClient(object):
                 self.ack_invite(msg)
             elif isinstance(msg, ServerForwardRing):
                 self.invited_ctx = msg.client_ctx.value
-                #print 'current call_ctx', repr(self.call_ctx), 'new call_ctx', repr(msg.call_ctx.value)
                 self.call_ctx = msg.call_ctx.value
                 print 'ringing...'
             elif isinstance(msg, ClientAnswer):
@@ -118,7 +118,8 @@ class SnoipClient(object):
     def answer(self):
         print 'snoipclient-answer'
         ca = ClientAnswer()
-        ca.set_values(client_ctx=self.client_ctx, call_ctx=self.call_ctx, codec=Codecs.values()[0])
+        ca.set_values(client_ctx=self.client_ctx, 
+            call_ctx=self.call_ctx, codec=Codecs.values()[0])
         print 'answering a ring of call_ctx:', repr(self.call_ctx)
         self._send(ca.pack())
         
@@ -146,7 +147,8 @@ class SnoipClient(object):
         
     def request_hangup(self):
         request = HangupRequest()
-        request.set_values(client_ctx = self.client_ctx, call_ctx = self.call_ctx)        
+        request.set_values(client_ctx = self.client_ctx, 
+            call_ctx = self.call_ctx)
         self._send(request.pack())
         print 'requesting hangup'
 
@@ -166,7 +168,10 @@ def create_login_msg(username, password='0'*20):
     password = struct.pack('!20c',*(password))
     ip = struct.pack('!16b', *(0 for i in xrange(16)))
     port = struct.pack('!i', 0)
-    msg_length = struct.pack('!h',  sum(map(lambda i: len(i), (username_length, username, password, ip, port))))
+    msg_length = struct.pack('!h',  
+        sum(map(
+            lambda i: len(i), 
+            (username_length, username, password, ip, port))))
     
     msg = header + msg_type + msg_length + username_length + \
             username + password + ip + port + trailer

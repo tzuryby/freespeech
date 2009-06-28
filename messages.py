@@ -67,7 +67,8 @@ class Parser(object):
 
     def length(self, msg):
         try:
-            return struct.unpack('!h', msg[Framer.LEN_POS[0]:Framer.LEN_POS[1]])[0]
+            return struct.unpack(
+                '!h', msg[Framer.LEN_POS[0]:Framer.LEN_POS[1]])[0]
         except:
             return -1
         
@@ -90,9 +91,12 @@ class Parser(object):
             return None
 
 class Framer(object):
-    BOF, EOF = '\xab\xcd', '\xdc\xba'
-    TYPE_POS, LEN_POS = (2,4) , (4, 6)
-    BOF_LEN, EOF_LEN = len(BOF), len(EOF)
+    BOF = '\xab\xcd'
+    EOF = '\xdc\xba'
+    TYPE_POS = (2,4) 
+    LEN_POS = (4, 6)
+    BOF_LEN = len(BOF)
+    EOF_LEN = len(EOF)
     
     @staticmethod
     def frame(type_code, buf):
@@ -112,16 +116,20 @@ class CommMessage(object):
         self.msg = msg_type(buf=body)
         self.client_ctx = None
         
-        # for login request create new context, for others extract from the message
+        # for login request create new context, 
+        # for others extract from the message
         if (getattr(self.msg, 'client_ctx', None)):
             self.client_ctx = self.msg.client_ctx.value
             
         elif isinstance(self.msg, (LoginRequest,)):
             client_ctx = string_to_ctx(self.msg.username.value)
-            log.info('a new client_ctx ', 'username: %s ctx: %s' % (self.msg.username.value ,repr(client_ctx)))
+            log.info('a new client_ctx ', 
+                'username: %s ctx: %s' % (
+                    self.msg.username.value ,repr(client_ctx)))
             self.client_ctx = client_ctx
             
-        self.call_ctx = getattr(self.msg, 'call_ctx', None) and self.msg.call_ctx.value
+        self.call_ctx = getattr(self.msg, 'call_ctx', None) \
+            and self.msg.call_ctx.value
         
     def __repr__(self):
         return 'from %s <%s>, type %s, msg %s' % (
@@ -143,7 +151,8 @@ class BaseMessage(object):
     def _init_buffer(self, newbuffer=None):
         try:
             if not self.buf and not newbuffer:
-                length = sum((self.__dict__[field[0]].length for field in self.seq))
+                length = sum((self.__dict__[field[0]].length 
+                    for field in self.seq))
                 self.buf = self._create_buffer(length)
                 
             elif newbuffer:
@@ -210,7 +219,8 @@ class BaseMessage(object):
                 # set a property as field-name and its value as Field instance.
                 self.__dict__[key] = ctr(*args)
                 
-                # set the value either to a supplied argument or extract from the buffer
+                # set the value either to a supplied argument 
+                # or extract from the buffer
                 if values_dict:
                     self.__dict__[key].value = values_dict[key]
                 else:
@@ -257,7 +267,8 @@ class LoginRequest(BaseMessage):
     def __init__(self, *args, **kwargs):
         self.seq = [
             ('username_length', ByteField), 
-            ('username', StringField, lambda: '!%dc' % self.username_length.value ), 
+            ('username', StringField, 
+                lambda: '!%dc' % self.username_length.value ), 
             ('password', StringField, '!20c'), 
             ('local_ip', IPField), 
             ('local_port', IntField)]
@@ -272,7 +283,8 @@ class LoginReply(BaseMessage):
             ('client_public_port', IntField),
             ('ctx_expire', IntField),
             ('num_of_codecs', ByteField),
-            ('codec_list', StringField, lambda: '!%dc' % self.num_of_codecs.value)]
+            ('codec_list', StringField, 
+                lambda: '!%dc' % self.num_of_codecs.value)]
             
         BaseMessage.__init__(self, *args, **kwargs)
 
@@ -313,9 +325,11 @@ class ClientInvite(SignalingMessage):
         self.seq = [
             ('client_ctx', IntField),
             ('calle_name_length', ByteField),
-            ('calle_name', StringField, lambda: '!%dc' % self.calle_name_length.value),
+            ('calle_name', StringField, 
+                lambda: '!%dc' % self.calle_name_length.value),
             ('num_of_codecs', ByteField),
-            ('codec_list', StringField, lambda: '!%dc' % self.num_of_codecs.value)]
+            ('codec_list', StringField, 
+                lambda: '!%dc' % self.num_of_codecs.value)]
             
         SignalingMessage.__init__(self, *args, **kwargs)
         
@@ -330,11 +344,13 @@ class ServerForwardInvite(SignalingMessage):
             ('call_ctx', IntField),
             ('call_type', ByteField),
             ('client_name_length', ByteField),
-            ('client_name', StringField, lambda: '!%dc' % self.client_name_length.value),
+            ('client_name', StringField, 
+                lambda: '!%dc' % self.client_name_length.value),
             ('client_public_ip', IPField),
             ('client_public_port', IntField),
             ('num_of_codecs', ByteField),
-            ('codec_list', StringField, lambda: '!%dc' % self.num_of_codecs.value)]
+            ('codec_list', StringField, 
+                lambda: '!%dc' % self.num_of_codecs.value)]
             
         SignalingMessage.__init__(self, *args, **kwargs)
         
@@ -377,7 +393,8 @@ class ClientRTP(BaseMessage):
             ('call_ctx', IntField),
             ('sequence', IntField),
             ('rtp_bytes_length', ShortField),
-            ('rtp_bytes', StringField, lambda: '!%dc' % self.rtp_bytes_length.value)]
+            ('rtp_bytes', StringField, 
+                lambda: '!%dc' % self.rtp_bytes_length.value)]
             
         BaseMessage.__init__(self, *args, **kwargs)
         
