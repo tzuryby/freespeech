@@ -60,7 +60,7 @@ class SnoipDaemon(Daemon):
         self.stop_all()
         Daemon.stop(self)
         
-        
+'''        
 # ***********************************************************
 # LOG DAEMON
 # ***********************************************************
@@ -134,9 +134,10 @@ class LogDaemon(Daemon):
     def stop(self):
         self.stopLogging()
         Daemon.stop(self)
+'''
 
 snoip_daemon = SnoipDaemon('/tmp/snoip_daemon.pid')
-log_daemon = LogDaemon('/tmp/snoip_log_daemon.pid')
+#log_daemon = LogDaemon('/tmp/snoip_log_daemon.pid')
 
 def start_console_mode():
     try:
@@ -153,13 +154,15 @@ daemonizer = {
         'start': snoip_daemon.start, 
         'stop': snoip_daemon.stop, 
         'restart': snoip_daemon.restart
-    },
+    }
+'''    ,
     'log': 
     { 
         'start': log_daemon.start, 
         'stop': log_daemon.stop, 
         'restart': log_daemon.restart
     }
+'''    
 }
 
 help_message = '''    
@@ -168,8 +171,7 @@ Start as console application
 $ python server.py 
 
 Treat as Daemon:
-$ python server.py snoip start|stop|restart
-$ python server.py log start|stop|restart
+$ python server.py start|stop|restart
 '''
 
 if __name__ == '__main__':
@@ -178,9 +180,9 @@ if __name__ == '__main__':
         start_console_mode()
     elif sys.argv[1] in ('help', '--help', 'h', '-h'):
         print help_message
-    elif len(sys.argv) == 3:
-        daemon = sys.argv[1]
-        action = sys.argv[2]
-        if daemon in daemonizer:
-            if action in daemonizer[daemon]:
-                daemonizer[daemon][action]()        
+    elif len(sys.argv) == 2:
+        daemon = 'snoip' #sys.argv[1]
+        action = sys.argv[1]
+        #if daemon in daemonizer:
+        if action in daemonizer[daemon]:
+            daemonizer[daemon][action]()
