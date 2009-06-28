@@ -46,7 +46,7 @@ class Logger:
         
         self.logger.addHandler(self.ch)
         self.logger.addHandler(self.fh)
-        self.logger.addHandler(self.sh)
+        #self.logger.addHandler(self.sh)
         
     def debug(self, *args):
         self.logger.debug(

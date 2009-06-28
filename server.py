@@ -59,8 +59,15 @@ class SnoipDaemon(Daemon):
     def stop(self):
         self.stop_all()
         Daemon.stop(self)
-        
+
+snoip_daemon = SnoipDaemon('/tmp/snoip_daemon.pid')
+
 '''        
+this logdaemon code is not in use anymore
+however I left it in here so to keep the 
+twisted protocol for logging in case of 
+future use.
+
 # ***********************************************************
 # LOG DAEMON
 # ***********************************************************
@@ -134,10 +141,12 @@ class LogDaemon(Daemon):
     def stop(self):
         self.stopLogging()
         Daemon.stop(self)
+        
+log_daemon = LogDaemon('/tmp/snoip_log_daemon.pid')
 '''
 
-snoip_daemon = SnoipDaemon('/tmp/snoip_daemon.pid')
-#log_daemon = LogDaemon('/tmp/snoip_log_daemon.pid')
+
+
 
 def start_console_mode():
     try:
@@ -155,14 +164,6 @@ daemonizer = {
         'stop': snoip_daemon.stop, 
         'restart': snoip_daemon.restart
     }
-'''    ,
-    'log': 
-    { 
-        'start': log_daemon.start, 
-        'stop': log_daemon.stop, 
-        'restart': log_daemon.restart
-    }
-'''    
 }
 
 help_message = '''    

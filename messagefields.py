@@ -125,9 +125,8 @@ class IPField(Field):
         '''a wrapper around x.value'''
         if k == 'value':
             if type(v).__name__ == 'str':
-                v = [int(o) 
-                    for o in v.split('.')] 
-                    + [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] # 4+12
+                v = [int(o) for o in 
+                        v.split('.')] + [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] # 4+12
                 self._value = v
             else:
                 self._value = v
